@@ -86,7 +86,7 @@ pip install -r requirements.txt
 ### 2.3. Prérequis
 
 **Fichiers Requis**
-- 📥 Base de données NORMAN ([Télécharger ici](https://drive.google.com/file/d/1mZa1r9RZ4Ioy1cILJqIteAz3vUs_UIaU/view))
+- 📥 Base de données NORMAN ([Télécharger ici](https://github.com/leesulab/pipeline_identification_ms/releases/download/v1/norman_all_ccs_all_rt_pos_neg_with_ms2.h5))
 - 🗂️ Fichiers blancs dans `data/input/blanks/`
 
 **Structure à Créer**
