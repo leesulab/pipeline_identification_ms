@@ -534,6 +534,52 @@ def print_final_stats(results: Dict[str, SampleResult]) -> None:
     memory_info = process.memory_info()
     print(f"\nUtilisation mémoire finale: {memory_info.rss / 1024**3:.2f} GB")
 
+PIPELINE_STEPS = (
+    "calibration",
+    "identification",
+    "file_discovery",
+    "blanks",
+    "samples",
+    "feature_alignment",
+    "visualizations",
+    "similarities",
+    "categories",
+)
+
+
+def normalize_steps(
+    steps: Union[str, List[str], None] = None,
+) -> List[str]:
+    """Valide et normalise les étapes demandées."""
+    if steps is None or steps == "all":
+        return list(PIPELINE_STEPS)
+
+    if isinstance(steps, str):
+        requested_steps = [steps]
+    else:
+        requested_steps = list(steps)
+
+    if not requested_steps:
+        raise ValueError("Au moins une étape doit être sélectionnée.")
+
+    unknown_steps = sorted(
+        set(requested_steps) - set(PIPELINE_STEPS)
+    )
+
+    if unknown_steps:
+        raise ValueError(
+            "Étape(s) inconnue(s) : "
+            + ", ".join(unknown_steps)
+            + ". Étapes autorisées : "
+            + ", ".join(PIPELINE_STEPS)
+        )
+
+    return [
+        step
+        for step in PIPELINE_STEPS
+        if step in requested_steps
+    ]
+
 def _emit_progress(
     callback: Optional[Callable[[Dict[str, Any]], None]],
     *,
