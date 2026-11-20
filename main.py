@@ -698,7 +698,7 @@ def run_pipeline(
     base_dir: Union[str, Path, None] = None,
     steps: Union[str, List[str], None] = None,
     progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
-) -> Dict[str, Union[str, int, float, List[str]]]:
+) -> Dict[str, Any]:
     """
     Exécute la pipeline complète.
 
@@ -774,6 +774,80 @@ def run_pipeline(
                 "log_file": str(log_file),
                 "steps": selected_steps,
                 "sample_count": len(replicate_groups),
+                "duration_seconds": round(total_time, 3),
+            }
+
+            _emit_progress(
+                progress_callback,
+                step="pipeline",
+                status="success",
+                message="Étapes sélectionnées terminées",
+                progress=1.0,
+            )
+
+            return pipeline_result
+
+        if selected_steps == ["blanks"]:
+            _emit_progress(
+                progress_callback,
+                step="blanks",
+                status="running",
+                message="Traitement des blanks",
+                progress=0.30,
+            )
+
+            discovered = discover_input_files(
+                require_samples=False
+            )
+            blank_files = discovered["blank_files"]
+            blank_peaks = pd.DataFrame()
+            blank_peaks_file = None
+
+            print("\n" + "=" * 80)
+            print("TRAITEMENT AUTONOME DES BLANKS")
+            print("=" * 80)
+
+            if blank_files:
+                print(
+                    f"   • {len(blank_files)} fichier(s) blank trouvé(s)"
+                )
+
+                blank_peaks = (
+                    blank_processor.process_blank_with_replicates(
+                        blank_files[0].stem,
+                        blank_files,
+                        Config.PATHS.INTERMEDIATE_DIR / "blanks",
+                    )
+                )
+
+                blank_peaks_file = save_blank_peaks(blank_peaks)
+
+                print(
+                    "   ✓ Résultat sauvegardé : "
+                    f"{blank_peaks_file}"
+                )
+            else:
+                print(
+                    "   ℹ Aucun fichier blank trouvé. "
+                    "Aucune soustraction ne sera nécessaire."
+                )
+
+            total_time = time.time() - start_time
+
+            pipeline_result = {
+                "status": "success",
+                "base_dir": str(Config.PATHS.BASE_DIR),
+                "output_dir": str(Config.PATHS.OUTPUT_DIR),
+                "log_file": str(log_file),
+                "steps": selected_steps,
+                "sample_count": 0,
+                "blank_file_count": len(blank_files),
+                "blank_count": len(blank_peaks),
+                "blank_peaks_file": (
+                    str(blank_peaks_file)
+                    if blank_peaks_file is not None
+                    else None
+                ),
                 "duration_seconds": round(total_time, 3),
             }
 
