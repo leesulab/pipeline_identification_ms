@@ -1226,6 +1226,48 @@ def execute_categories_step(
     return result
 
 
+STEP_EXECUTORS = {
+    "file_discovery": execute_file_discovery_step,
+    "blanks": execute_blanks_step,
+    "samples": execute_samples_step,
+    "feature_alignment": execute_feature_alignment_step,
+    "visualizations": execute_visualizations_step,
+    "similarities": execute_similarities_step,
+    "categories": execute_categories_step,
+}
+
+
+def run_selected_steps(
+    selected_steps: List[str],
+    progress_callback: Optional[
+        Callable[[Dict[str, Any]], None]
+    ] = None,
+) -> Dict[str, Any]:
+    """Exécute les étapes demandées dans un contexte partagé."""
+    unsupported_steps = [
+        step
+        for step in selected_steps
+        if step not in STEP_EXECUTORS
+    ]
+
+    if unsupported_steps:
+        raise NotImplementedError(
+            "Ces étapes ne sont pas encore exécutables seules : "
+            + ", ".join(unsupported_steps)
+        )
+
+    context = create_pipeline_context()
+
+    for step in selected_steps:
+        executor = STEP_EXECUTORS[step]
+        executor(
+            context,
+            progress_callback,
+        )
+
+    return context
+
+
 def _emit_progress(
     callback: Optional[Callable[[Dict[str, Any]], None]],
     *,
@@ -1277,28 +1319,6 @@ def run_pipeline(
     selected_steps = normalize_steps(steps)
     full_pipeline_requested = steps is None or steps == "all"
 
-    supported_composed_selections = {
-        ("file_discovery", "blanks"),
-        ("blanks", "samples"),
-        ("blanks", "samples", "feature_alignment"),
-        ("visualizations", "similarities", "categories"),
-    }
-
-    selected_steps_key = tuple(selected_steps)
-
-    if (
-        not full_pipeline_requested
-        and len(selected_steps) > 1
-        and selected_steps_key
-        not in supported_composed_selections
-    ):
-        raise NotImplementedError(
-            "Cette sélection composée n'est pas encore activée : "
-            + ", ".join(selected_steps)
-            + ". Exécutez une seule étape, ou utilisez steps='all' "
-            "pour la pipeline complète."
-        )
-
     if base_dir is not None:
         Config.set_base_dir(base_dir)
 
@@ -1322,6 +1342,50 @@ def run_pipeline(
         replicate_handler = ReplicateHandler()
         blank_processor = BlankProcessor()
         feature_processor = FeatureProcessor()
+
+        if not full_pipeline_requested:
+            context = run_selected_steps(
+                selected_steps,
+                progress_callback,
+            )
+
+            total_time = time.time() - start_time
+
+            sample_result = context["step_results"].get(
+                "samples",
+                {},
+            )
+            discovery_result = context["step_results"].get(
+                "file_discovery",
+                {},
+            )
+
+            sample_count = sample_result.get(
+                "sample_count",
+                discovery_result.get("sample_count", 0),
+            )
+
+            pipeline_result = {
+                "status": "success",
+                "base_dir": str(Config.PATHS.BASE_DIR),
+                "output_dir": str(Config.PATHS.OUTPUT_DIR),
+                "log_file": str(log_file),
+                "steps": selected_steps,
+                "sample_count": sample_count,
+                "generated_files": context["generated_files"],
+                "step_results": context["step_results"],
+                "duration_seconds": round(total_time, 3),
+            }
+
+            _emit_progress(
+                progress_callback,
+                step="pipeline",
+                status="success",
+                message="Étapes sélectionnées terminées",
+                progress=1.0,
+            )
+
+            return pipeline_result
 
         if selected_steps == [
             "visualizations",
