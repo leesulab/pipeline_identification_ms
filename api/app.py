@@ -14,6 +14,7 @@ from fastapi import (
     status,
 )
 from pydantic import BaseModel, Field
+from fastapi.responses import FileResponse
 
 from api.jobs import (
     create_job,
@@ -434,3 +435,79 @@ def list_job_files(
         )
 
     return files
+
+def resolve_job_file(
+    job_id: str,
+    relative_path: str,
+) -> Path:
+    """Résout un fichier du job sans autoriser de sortie du dossier."""
+    try:
+        read_job(job_id)
+    except FileNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+
+    requested_path = Path(relative_path)
+
+    if (
+        requested_path.is_absolute()
+        or not requested_path.parts
+        or any(
+            part in {"", ".", ".."}
+            for part in requested_path.parts
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Chemin de fichier invalide.",
+        )
+
+    job_dir = get_job_dir(job_id).resolve()
+    target_file = (job_dir / requested_path).resolve()
+
+    try:
+        target_file.relative_to(job_dir)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le chemin demandé sort du dossier du job.",
+        ) from error
+
+    if (
+        not target_file.exists()
+        or not target_file.is_file()
+        or target_file.name.endswith(".uploading")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                "Fichier introuvable dans le job : "
+                f"{relative_path}"
+            ),
+        )
+
+    return target_file
+
+
+@app.get(
+    "/api/v1/jobs/{job_id}/files/{relative_path:path}",
+    response_class=FileResponse,
+    tags=["Fichiers"],
+)
+def download_job_file(
+    job_id: str,
+    relative_path: str,
+) -> FileResponse:
+    """Télécharge un fichier appartenant au job."""
+    target_file = resolve_job_file(
+        job_id,
+        relative_path,
+    )
+
+    return FileResponse(
+        path=target_file,
+        filename=target_file.name,
+        media_type="application/octet-stream",
+    )
