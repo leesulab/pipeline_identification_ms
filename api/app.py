@@ -362,3 +362,75 @@ def get_pipeline_job(job_id: str) -> JobResponse:
         ) from error
 
     return JobResponse(**job)
+
+
+class JobFileResponse(BaseModel):
+    """Métadonnées d'un fichier appartenant à un job."""
+
+    relative_path: str
+    size_bytes: int
+    category: str
+
+
+def classify_job_file(relative_path: Path) -> str:
+    """Classe un fichier du job selon son emplacement."""
+    path_text = relative_path.as_posix()
+
+    if path_text.startswith("data/input/"):
+        return "input"
+
+    if path_text.startswith("data/intermediate/"):
+        return "intermediate"
+
+    if path_text.startswith("data/output/"):
+        return "output"
+
+    if path_text.startswith("logs/"):
+        return "log"
+
+    if path_text.startswith("state/"):
+        return "state"
+
+    return "metadata"
+
+
+@app.get(
+    "/api/v1/jobs/{job_id}/files",
+    response_model=List[JobFileResponse],
+    tags=["Fichiers"],
+)
+def list_job_files(
+    job_id: str,
+) -> List[JobFileResponse]:
+    """Listedans l'espace isolé du job."""
+    try:
+        read_job(job_id)
+    except FileNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+
+    job_dir = get_job_dir(job_id)
+    files = []
+
+    for path in sorted(job_dir.rglob("*")):
+        if not path.is_file():
+            continue
+
+        if path.name.endswith(".uploading"):
+            continue
+
+        relative_path = path.relative_to(job_dir)
+
+        files.append(
+            JobFileResponse(
+                relative_path=relative_path.as_posix(),
+                size_bytes=path.stat().st_size,
+                category=classify_job_file(
+                    relative_path
+                ),
+            )
+        )
+
+    return files
