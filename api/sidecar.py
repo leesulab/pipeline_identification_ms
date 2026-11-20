@@ -136,12 +136,8 @@ def main() -> None:
         connection_info,
     )
 
-    # Tauri pourra aussi lire cette ligne sur stdout.
     print(
-        json.dumps(
-            connection_info,
-            ensure_ascii=False,
-        ),
+        f"API locale prête sur {connection_info['base_url']}",
         flush=True,
     )
 
