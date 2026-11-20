@@ -1440,7 +1440,7 @@ def run_pipeline(
         blank_processor = BlankProcessor()
         feature_processor = FeatureProcessor()
 
-        if not full_pipeline_requested:
+        if set(selected_steps).issubset(STEP_EXECUTORS):
             context = run_selected_steps(
                 selected_steps,
                 progress_callback,
