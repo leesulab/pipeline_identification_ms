@@ -861,6 +861,100 @@ def run_pipeline(
 
             return pipeline_result
 
+        if selected_steps == ["samples"]:
+            _emit_progress(
+                progress_callback,
+                step="samples",
+                status="running",
+                message="Traitement autonome des échantillons",
+                progress=0.40,
+            )
+
+            print("\n" + "=" * 80)
+            print("TRAITEMENT AUTONOME DES ÉCHANTILLONS")
+            print("=" * 80)
+
+            calibration_file = (
+                Config.PATHS.INPUT_CALIBRANTS
+                / "CCS_calibration_data.csv"
+            )
+
+            if not calibration_file.exists():
+                raise FileNotFoundError(
+                    "Fichier de calibration non trouvé : "
+                    f"{calibration_file}"
+                )
+
+            calibrator = CCSCalibrator(calibration_file)
+
+            discovered = discover_input_files(
+                require_samples=True
+            )
+
+            blank_files = discovered["blank_files"]
+            replicate_groups = discovered["replicate_groups"]
+
+            blank_peaks = load_optional_blank_peaks(
+                blank_files
+            )
+
+            if blank_peaks.empty:
+                print(
+                    "   ℹ Aucun résultat de blank appliqué"
+                )
+            else:
+                print(
+                    "   ✓ Résultat des blanks rechargé : "
+                    f"{len(blank_peaks)} pics"
+                )
+
+            sample_results = process_samples_parallel(
+                replicate_groups,
+                blank_peaks,
+                calibrator,
+                Config.PATHS.INTERMEDIATE_SAMPLES,
+            )
+
+            successful_samples = {
+                name: result
+                for name, result in sample_results.items()
+                if result.success
+            }
+
+            if not successful_samples:
+                raise RuntimeError(
+                    "Aucun échantillon n'a été traité avec succès"
+                )
+
+            total_time = time.time() - start_time
+
+            pipeline_result = {
+                "status": "success",
+                "base_dir": str(Config.PATHS.BASE_DIR),
+                "output_dir": str(Config.PATHS.OUTPUT_DIR),
+                "intermediate_samples_dir": str(
+                    Config.PATHS.INTERMEDIATE_SAMPLES
+                ),
+                "log_file": str(log_file),
+                "steps": selected_steps,
+                "sample_count": len(replicate_groups),
+                "successful_sample_count": len(
+                    successful_samples
+                ),
+                "blank_count": len(blank_peaks),
+                "duration_seconds": round(total_time, 3),
+            }
+
+            _emit_progress(
+                progress_callback,
+                step="pipeline",
+                status="success",
+                message="Étapes sélectionnées terminées",
+                progress=1.0,
+            )
+
+            return pipeline_result
+
         # 1. Chargement des données de calibration CCS
         _emit_progress(
             progress_callback,
