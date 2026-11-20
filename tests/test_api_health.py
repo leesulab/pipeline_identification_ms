@@ -15,5 +15,5 @@ def test_health() -> None:
     assert response.json() == {
         "status": "ok",
         "service": "pipeline-identification-ms",
-        "version": "0.1.0",
+        "version": "0.2.0",
     }

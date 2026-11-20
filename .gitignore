@@ -9,3 +9,6 @@ __pycache__/
 
 # Environnement virtuel local
 .venv/
+
+# Jobs locaux de l'API
+jobs/
