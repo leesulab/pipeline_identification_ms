@@ -16,6 +16,7 @@ from fastapi import (
     status,
 )
 from pydantic import BaseModel, Field
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
 from api.jobs import (
@@ -583,3 +584,29 @@ async def require_local_api_token(
             )
 
     return await call_next(request)
+
+TAURI_ALLOWED_ORIGINS = [
+    # Serveur Vite utilisé par `tauri dev`.
+    "http://localhost:1420",
+    "http://127.0.0.1:1420",
+    # Origines possibles du protocole Tauri en production.
+    "tauri://localhost",
+    "http://tauri.localhost",
+    "https://tauri.localhost",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=TAURI_ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=[
+        "GET",
+        "POST",
+        "OPTIONS",
+    ],
+    allow_headers=[
+        "Accept",
+        "Authorization",
+        "Content-Type",
+    ],
+)
