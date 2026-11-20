@@ -580,6 +580,36 @@ def normalize_steps(
         if step in requested_steps
     ]
 
+def get_blank_peaks_file() -> Path:
+    """Retourne le fichier persistant contenant les pics des blanks."""
+    return (
+        Config.PATHS.INTERMEDIATE_DIR
+        / "blanks"
+        / "blank_peaks.parquet"
+    )
+
+
+def save_blank_peaks(blank_peaks: pd.DataFrame) -> Path:
+    """Sauvegarde les pics des blanks pour une reprise ultérieure."""
+    output_file = get_blank_peaks_file()
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    blank_peaks.to_parquet(output_file, index=False)
+    return output_file
+
+
+def load_blank_peaks() -> pd.DataFrame:
+    """Recharge les pics des blanks produits par une exécution précédente."""
+    input_file = get_blank_peaks_file()
+
+    if not input_file.exists():
+        raise FileNotFoundError(
+            "Résultat persistant des blanks introuvable : "
+            f"{input_file}. Exécutez d'abord l'étape 'blanks'."
+        )
+
+    return pd.read_parquet(input_file)
+
+
 def _emit_progress(
     callback: Optional[Callable[[Dict[str, Any]], None]],
     *,
