@@ -151,6 +151,38 @@ class Config:
     }
 
     @classmethod
+    def set_base_dir(cls, base_dir: Union[str, Path]) -> PathConfig:
+        """
+        Configure tous les chemins de la pipeline à partir d'un dossier racine.
+
+        Args:
+            base_dir: dossier de travail de la pipeline.
+
+        Returns:
+            La nouvelle configuration de chemins.
+        """
+        base_dir = Path(base_dir).expanduser().resolve()
+        data_dir = base_dir / "data"
+        input_dir = data_dir / "input"
+        intermediate_dir = data_dir / "intermediate"
+
+        cls.PATHS = PathConfig(
+            BASE_DIR=base_dir,
+            DATA_DIR=data_dir,
+            INPUT_DIR=input_dir,
+            OUTPUT_DIR=data_dir / "output",
+            INTERMEDIATE_DIR=intermediate_dir,
+            INPUT_SAMPLES=input_dir / "samples",
+            INPUT_BLANKS=input_dir / "blanks",
+            INPUT_CALIBRANTS=input_dir / "calibration",
+            INPUT_DATABASES=input_dir / "databases",
+            INTERMEDIATE_SAMPLES=intermediate_dir / "samples",
+            INTERMEDIATE_CALIBRANTS=intermediate_dir / "calibrants",
+        )
+
+        return cls.PATHS
+
+    @classmethod
     def setup_directories(cls) -> None:
         """Crée tous les répertoires nécessaires."""
         dirs = [

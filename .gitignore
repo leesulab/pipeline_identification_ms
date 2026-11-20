@@ -1,3 +1,8 @@
 data/input/samples/Bougival 0.02 2024_replicate_1.parquet
 data/input/databases/norman_all_ccs_all_rt_pos_neg_with_ms2.h5
 data/input/databases/norman_all_ccs_all_rt_pos_neg_with_ms2_old.h5
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
