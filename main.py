@@ -596,6 +596,13 @@ def run_pipeline(
         feature_processor = FeatureProcessor()
 
         # 1. Chargement des données de calibration CCS
+        _emit_progress(
+            progress_callback,
+            step="calibration",
+            status="running",
+            message="Chargement de la calibration CCS",
+            progress=0.05,
+        )
         print("\n📈 Chargement des données de calibration CCS...")
         calibration_file = Config.PATHS.INPUT_CALIBRANTS / "CCS_calibration_data.csv"
         if not calibration_file.exists():
@@ -604,11 +611,25 @@ def run_pipeline(
         print("   ✓ Données de calibration chargées avec succès")
 
         # 2. Initialisation de l'identificateur
+        _emit_progress(
+            progress_callback,
+            step="identification",
+            status="running",
+            message="Chargement de la base d'identification",
+            progress=0.12,
+        )
         print("\n📚 Initialisation de l'identification...")
         identifier = CompoundIdentifier()
         print("   ✓ Base de données chargée avec succès")
         
         # Recherche des fichiers
+        _emit_progress(
+            progress_callback,
+            step="file_discovery",
+            status="running",
+            message="Détection des fichiers d'entrée",
+            progress=0.20,
+        )
         print("\n📁 Recherche des blanks...")
         blank_dir = Config.PATHS.INPUT_BLANKS
         blank_files = list(blank_dir.glob("*.parquet"))
@@ -635,6 +656,13 @@ def run_pipeline(
             print(f"      - {base_name}: {len(replicates)} réplicat(s)")
 
         # 5. Traitement des blanks
+        _emit_progress(
+            progress_callback,
+            step="blanks",
+            status="running",
+            message="Traitement des blanks",
+            progress=0.30,
+        )
         print("\n" + "="*80)
         print("TRAITEMENT DES BLANKS")
         print("=" * 80)
@@ -648,6 +676,13 @@ def run_pipeline(
             )
 
 # 6. Traitement des échantillons
+        _emit_progress(
+            progress_callback,
+            step="samples",
+            status="running",
+            message="Traitement des échantillons",
+            progress=0.40,
+        )
         print("\n" + "="*80)
         print("TRAITEMENT DES ÉCHANTILLONS")
         print("=" * 80)
@@ -663,6 +698,14 @@ def run_pipeline(
         if not any(r.success for r in results.values()):
             raise Exception("Aucun échantillon n'a été traité avec succès")
 
+        _emit_progress(
+            progress_callback,
+            step="feature_alignment",
+            status="running",
+            message="Alignement des features et identification",
+            progress=0.70,
+        )
+
         print("\n" + "="*80)
         print("ALIGNEMENT DES FEATURES")
         print("="*80)
@@ -675,6 +718,14 @@ def run_pipeline(
             identifier=identifier
         )
 
+        _emit_progress(
+            progress_callback,
+            step="visualizations",
+            status="running",
+            message="Génération des visualisations",
+            progress=0.82,
+        )
+
         print("\n" + "="*80)
         print("GÉNÉRATION DES VISUALISATIONS")
         print("="*80)
@@ -683,12 +734,28 @@ def run_pipeline(
         output_dir = Config.PATHS.OUTPUT_DIR
         generate_visualizations(output_dir)
         
+        _emit_progress(
+            progress_callback,
+            step="similarities",
+            status="running",
+            message="Analyse des similarités",
+            progress=0.90,
+        )
+
         print("\n" + "="*80)
         print("ANALYSE DES SIMILARITÉS")
         print("="*80)
         
         print("\n📊 Analyse des clusters d'échantillons...")
         analyze_and_save_clusters(output_dir)
+
+        _emit_progress(
+            progress_callback,
+            step="categories",
+            status="running",
+            message="Analyse des catégories",
+            progress=0.95,
+        )
 
         print("\n" + "="*80)
         print("ANALYSE DES CATÉGORIES")
