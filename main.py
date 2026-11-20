@@ -740,6 +740,53 @@ def run_pipeline(
         blank_processor = BlankProcessor()
         feature_processor = FeatureProcessor()
 
+        if selected_steps == ["file_discovery"]:
+            _emit_progress(
+                progress_callback,
+                step="file_discovery",
+                status="running",
+                message="Détection des fichiers d'entrée",
+                progress=0.20,
+            )
+
+            discovered = discover_input_files(
+                require_samples=False
+            )
+
+            blank_files = discovered["blank_files"]
+            sample_files = discovered["sample_files"]
+            replicate_groups = discovered["replicate_groups"]
+
+            print("\n📁 Détection des fichiers")
+            print(f"   • Blanks : {len(blank_files)}")
+            print(f"   • Fichiers échantillons : {len(sample_files)}")
+            print(
+                "   • Groupes d'échantillons : "
+                f"{len(replicate_groups)}"
+            )
+
+            total_time = time.time() - start_time
+
+            pipeline_result = {
+                "status": "success",
+                "base_dir": str(Config.PATHS.BASE_DIR),
+                "output_dir": str(Config.PATHS.OUTPUT_DIR),
+                "log_file": str(log_file),
+                "steps": selected_steps,
+                "sample_count": len(replicate_groups),
+                "duration_seconds": round(total_time, 3),
+            }
+
+            _emit_progress(
+                progress_callback,
+                step="pipeline",
+                status="success",
+                message="Étapes sélectionnées terminées",
+                progress=1.0,
+            )
+
+            return pipeline_result
+
         # 1. Chargement des données de calibration CCS
         _emit_progress(
             progress_callback,
