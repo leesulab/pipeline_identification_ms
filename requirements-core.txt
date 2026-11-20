@@ -1,0 +1,16 @@
+# Environnement d'exécution minimal de pipeline_identification_ms
+# Python 3.9
+
+numpy==2.0.2
+pandas==2.2.3
+scipy==1.13.1
+scikit-learn==1.5.2
+matplotlib==3.9.2
+seaborn==0.13.2
+pyarrow==18.0.0
+plotly==7.1.0
+psutil==6.1.0
+tqdm==4.70.1
+
+# Version de DEIMoS utilisée historiquement par le projet
+deimos @ git+https://github.com/pnnl/deimos.git@d2fd7d704eed15484a73d294501a60707525d284
