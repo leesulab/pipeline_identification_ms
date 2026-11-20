@@ -1281,6 +1281,7 @@ def run_pipeline(
         ("file_discovery", "blanks"),
         ("blanks", "samples"),
         ("blanks", "samples", "feature_alignment"),
+        ("visualizations", "similarities", "categories"),
     }
 
     selected_steps_key = tuple(selected_steps)
@@ -1321,6 +1322,57 @@ def run_pipeline(
         replicate_handler = ReplicateHandler()
         blank_processor = BlankProcessor()
         feature_processor = FeatureProcessor()
+
+        if selected_steps == [
+            "visualizations",
+            "similarities",
+            "categories",
+        ]:
+            context = create_pipeline_context()
+
+            execute_visualizations_step(
+                context,
+                progress_callback,
+            )
+
+            execute_similarities_step(
+                context,
+                progress_callback,
+            )
+
+            execute_categories_step(
+                context,
+                progress_callback,
+            )
+
+            total_time = time.time() - start_time
+
+            pipeline_result = {
+                "status": "success",
+                "base_dir": str(Config.PATHS.BASE_DIR),
+                "output_dir": str(Config.PATHS.OUTPUT_DIR),
+                "log_file": str(log_file),
+                "steps": selected_steps,
+                "sample_count": 0,
+                "generated_files": context[
+                    "generated_files"
+                ],
+                "generated_file_count": len(
+                    context["generated_files"]
+                ),
+                "step_results": context["step_results"],
+                "duration_seconds": round(total_time, 3),
+            }
+
+            _emit_progress(
+                progress_callback,
+                step="pipeline",
+                status="success",
+                message="Étapes sélectionnées terminées",
+                progress=1.0,
+            )
+
+            return pipeline_result
 
         if selected_steps == [
             "blanks",
