@@ -1,6 +1,7 @@
 """Application FastAPI exposant la pipeline d'identification MS."""
 
 import os
+import secrets
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -10,11 +11,12 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Request,
     UploadFile,
     status,
 )
 from pydantic import BaseModel, Field
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from api.jobs import (
     create_job,
@@ -525,3 +527,59 @@ def download_job_file(
         filename=target_file.name,
         media_type="application/octet-stream",
     )
+
+
+@app.middleware("http")
+async def require_local_api_token(
+    request: Request,
+    call_next,
+):
+    """
+    Protège les routes /api/v1 lorsque PIPELINE_API_TOKEN est défini.
+
+    /health reste public afin que l'application Tauri puisse vérifier
+    que le backend local est démarré.
+    """
+    expected_token = os.environ.get(
+        "PIPELINE_API_TOKEN",
+        "",
+    )
+
+    if (
+        expected_token
+        and request.url.path.startswith("/api/v1/")
+    ):
+        authorization = request.headers.get(
+            "Authorization",
+            "",
+        )
+
+        scheme, separator, provided_token = (
+            authorization.partition(" ")
+        )
+
+        valid_token = (
+            separator == " "
+            and scheme.lower() == "bearer"
+            and bool(provided_token)
+            and secrets.compare_digest(
+                provided_token,
+                expected_token,
+            )
+        )
+
+        if not valid_token:
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={
+                    "detail": (
+                        "Jeton d'authentification local "
+                        "absent ou invalide."
+                    )
+                },
+                headers={
+                    "WWW-Authenticate": "Bearer",
+                },
+            )
+
+    return await call_next(request)
