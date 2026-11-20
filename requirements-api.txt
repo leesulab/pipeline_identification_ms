@@ -5,3 +5,6 @@ fastapi==0.115.14
 uvicorn[standard]==0.34.3
 httpx==0.28.1
 pytest==8.4.2
+
+# Réception de fichiers multipart/form-data
+python-multipart==0.0.20
