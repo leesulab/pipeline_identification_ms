@@ -527,8 +527,20 @@ def print_final_stats(results: Dict[str, SampleResult]) -> None:
     memory_info = process.memory_info()
     print(f"\nUtilisation mémoire finale: {memory_info.rss / 1024**3:.2f} GB")
 
-def main() -> None:
-    """Point d'entrée principal de la pipeline."""
+def run_pipeline(base_dir: Union[str, Path, None] = None) -> None:
+    """
+    Exécute la pipeline complète.
+
+    Args:
+        base_dir:
+            Dossier de travail contenant l'arborescence data/.
+            Si aucune valeur n'est fournie, les chemins par défaut de Config
+            sont conservés.
+    """
+    if base_dir is not None:
+        Config.set_base_dir(base_dir)
+
+    Config.setup_directories()
     setup_logging()
     start_time = time.time()
     print("\n🚀 DÉMARRAGE DE LA PIPELINE D'ANALYSE")
@@ -556,7 +568,7 @@ def main() -> None:
         
         # Recherche des fichiers
         print("\n📁 Recherche des blanks...")
-        blank_dir = Path("data/input/blanks")
+        blank_dir = Config.PATHS.INPUT_BLANKS
         blank_files = list(blank_dir.glob("*.parquet"))
 
         # Affichage des informations sur les blanks
@@ -663,6 +675,11 @@ def main() -> None:
         print("\n❌ ERREUR DANS LA PIPELINE")
         logger.error(f"Erreur pipeline : {str(e)}")
         raise
+
+def main() -> None:
+    """Point d'entrée historique pour le lancement en ligne de commande."""
+    run_pipeline()
+
 
 if __name__ == "__main__":
     main()
