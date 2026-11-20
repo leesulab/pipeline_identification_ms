@@ -764,6 +764,17 @@ def run_pipeline(
                 Config.PATHS.INTERMEDIATE_DIR / "blanks"
             )
 
+            blank_peaks_file = save_blank_peaks(blank_peaks)
+            print(
+                "   ✓ Résultat des blanks sauvegardé : "
+                f"{blank_peaks_file}"
+            )
+        else:
+            print(
+                "   ℹ Aucun blank brut : aucune soustraction "
+                "ne sera appliquée"
+            )
+
 # 6. Traitement des échantillons
         _emit_progress(
             progress_callback,
