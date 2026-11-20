@@ -114,3 +114,98 @@ def read_job(job_id: str) -> Dict[str, Any]:
     return json.loads(
         job_file.read_text(encoding="utf-8")
     )
+
+
+def update_job(
+    job_id: str,
+    **changes: Any,
+) -> Dict[str, Any]:
+    """Met à jour puis persiste l'état d'un job."""
+    job = read_job(job_id)
+    job.update(changes)
+    job["updated_at"] = utc_now()
+    write_job(job)
+    return job
+
+
+def run_job(
+    job_id: str,
+    pipeline_runner,
+) -> Dict[str, Any]:
+    """Exécute un job avec le moteur de pipeline fourni."""
+    job = read_job(job_id)
+
+    if job["status"] == "running":
+        raise RuntimeError(
+            f"Le job {job_id} est déjà en cours d'exécution."
+        )
+
+    if job["status"] == "success":
+        raise RuntimeError(
+            f"Le job {job_id} est déjà terminé avec succès."
+        )
+
+    started_at = utc_now()
+
+    update_job(
+        job_id,
+        status="running",
+        progress=0.0,
+        current_step=None,
+        message="Démarrage de la pipeline",
+        started_at=started_at,
+        completed_at=None,
+        error=None,
+        result=None,
+    )
+
+    def progress_callback(event: Dict[str, Any]) -> None:
+        progress = event.get("progress")
+
+        changes = {
+            "status": (
+                "error"
+                if event.get("status") == "error"
+                else "running"
+            ),
+            "current_step": event.get("step"),
+            "message": event.get("message", ""),
+        }
+
+        if progress is not None:
+            changes["progress"] = float(progress)
+
+        update_job(job_id, **changes)
+
+    try:
+        result = pipeline_runner(
+            base_dir=job["working_dir"],
+            steps=job["steps"],
+            progress_callback=progress_callback,
+        )
+
+        return update_job(
+            job_id,
+            status="success",
+            progress=1.0,
+            current_step=None,
+            message="Pipeline terminée",
+            completed_at=utc_now(),
+            error=None,
+            result=result,
+        )
+
+    except Exception as error:
+        update_job(
+            job_id,
+            status="error",
+            current_step=None,
+            message=str(error),
+            completed_at=utc_now(),
+            error={
+                "type": type(error).__name__,
+                "message": str(error),
+            },
+            result=None,
+        )
+        raise
