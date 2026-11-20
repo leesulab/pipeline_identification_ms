@@ -610,6 +610,30 @@ def load_blank_peaks() -> pd.DataFrame:
     return pd.read_parquet(input_file)
 
 
+def load_optional_blank_peaks(
+    blank_files: List[Path],
+) -> pd.DataFrame:
+    """
+    Recharge les blanks persistants pour le traitement des échantillons.
+
+    Si des blanks bruts existent mais n'ont pas encore été traités,
+    l'étape samples est refusée afin d'éviter une analyse sans soustraction.
+    """
+    blank_peaks_file = get_blank_peaks_file()
+
+    if blank_peaks_file.exists():
+        return load_blank_peaks()
+
+    if blank_files:
+        raise FileNotFoundError(
+            "Des fichiers blanks bruts sont présents, mais leur résultat "
+            f"traité est absent : {blank_peaks_file}. "
+            "Exécutez d'abord l'étape 'blanks'."
+        )
+
+    return pd.DataFrame()
+
+
 def _emit_progress(
     callback: Optional[Callable[[Dict[str, Any]], None]],
     *,
