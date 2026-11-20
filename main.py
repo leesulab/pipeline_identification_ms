@@ -1062,6 +1062,68 @@ def run_pipeline(
 
             return pipeline_result
 
+        if selected_steps == ["visualizations"]:
+            _emit_progress(
+                progress_callback,
+                step="visualizations",
+                status="running",
+                message="Génération des visualisations",
+                progress=0.82,
+            )
+
+            print("\n" + "=" * 80)
+            print("GÉNÉRATION AUTONOME DES VISUALISATIONS")
+            print("=" * 80)
+
+            output_dir = Config.PATHS.OUTPUT_DIR
+            features_complete_file = (
+                output_dir
+                / "feature_matrix"
+                / "features_complete.parquet"
+            )
+
+            if not features_complete_file.exists():
+                raise FileNotFoundError(
+                    "Résultat d'identification introuvable : "
+                    f"{features_complete_file}. "
+                    "Exécutez d'abord l'étape "
+                    "'feature_alignment'."
+                )
+
+            generate_visualizations(output_dir)
+
+            generated_files = sorted(
+                str(path)
+                for path in output_dir.glob("*.png")
+            )
+
+            total_time = time.time() - start_time
+
+            pipeline_result = {
+                "status": "success",
+                "base_dir": str(Config.PATHS.BASE_DIR),
+                "output_dir": str(output_dir),
+                "features_complete_file": str(
+                    features_complete_file
+                ),
+                "generated_visualizations": generated_files,
+                "visualization_count": len(generated_files),
+                "log_file": str(log_file),
+                "steps": selected_steps,
+                "sample_count": 0,
+                "duration_seconds": round(total_time, 3),
+            }
+
+            _emit_progress(
+                progress_callback,
+                step="pipeline",
+                status="success",
+                message="Étapes sélectionnées terminées",
+                progress=1.0,
+            )
+
+            return pipeline_result
+
         # 1. Chargement des données de calibration CCS
         _emit_progress(
             progress_callback,
