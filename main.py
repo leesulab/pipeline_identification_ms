@@ -835,6 +835,102 @@ def execute_blanks_step(
     return result
 
 
+def execute_samples_step(
+    context: Dict[str, Any],
+    progress_callback: Optional[
+        Callable[[Dict[str, Any]], None]
+    ] = None,
+) -> Dict[str, Any]:
+    """Traite les échantillons en réutilisant le contexte disponible."""
+    _emit_progress(
+        progress_callback,
+        step="samples",
+        status="running",
+        message="Traitement des échantillons",
+        progress=0.40,
+    )
+
+    print("\n" + "=" * 80)
+    print("TRAITEMENT DES ÉCHANTILLONS")
+    print("=" * 80)
+
+    calibration_file = (
+        Config.PATHS.INPUT_CALIBRANTS
+        / "CCS_calibration_data.csv"
+    )
+
+    if not calibration_file.exists():
+        raise FileNotFoundError(
+            "Fichier de calibration non trouvé : "
+            f"{calibration_file}"
+        )
+
+    calibrator = context.get("calibrator")
+
+    if calibrator is None:
+        calibrator = CCSCalibrator(calibration_file)
+        context["calibrator"] = calibrator
+
+    discovered = get_or_discover_inputs(
+        context,
+        require_samples=True,
+    )
+
+    blank_files = discovered["blank_files"]
+    replicate_groups = discovered["replicate_groups"]
+
+    blank_peaks = context.get("blank_peaks")
+
+    if blank_peaks is None:
+        blank_peaks = load_optional_blank_peaks(
+            blank_files
+        )
+        context["blank_peaks"] = blank_peaks
+
+    if blank_peaks.empty:
+        print("   ℹ Aucun résultat de blank appliqué")
+    else:
+        print(
+            "   ✓ Résultat des blanks disponible : "
+            f"{len(blank_peaks)} pics"
+        )
+
+    sample_results = process_samples_parallel(
+        replicate_groups,
+        blank_peaks,
+        calibrator,
+        Config.PATHS.INTERMEDIATE_SAMPLES,
+    )
+
+    successful_samples = {
+        name: result
+        for name, result in sample_results.items()
+        if result.success
+    }
+
+    if not successful_samples:
+        raise RuntimeError(
+            "Aucun échantillon n'a été traité avec succès"
+        )
+
+    context["sample_results"] = sample_results
+
+    result = {
+        "sample_count": len(replicate_groups),
+        "successful_sample_count": len(
+            successful_samples
+        ),
+        "blank_count": len(blank_peaks),
+        "intermediate_samples_dir": str(
+            Config.PATHS.INTERMEDIATE_SAMPLES
+        ),
+    }
+
+    context["step_results"]["samples"] = result
+
+    return result
+
+
 def _emit_progress(
     callback: Optional[Callable[[Dict[str, Any]], None]],
     *,
