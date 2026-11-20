@@ -931,6 +931,100 @@ def execute_samples_step(
     return result
 
 
+def execute_feature_alignment_step(
+    context: Dict[str, Any],
+    progress_callback: Optional[
+        Callable[[Dict[str, Any]], None]
+    ] = None,
+) -> Dict[str, Any]:
+    """Aligne les features et réalise l'identification."""
+    _emit_progress(
+        progress_callback,
+        step="feature_alignment",
+        status="running",
+        message="Alignement des features et identification",
+        progress=0.70,
+    )
+
+    print("\n" + "=" * 80)
+    print("ALIGNEMENT DES FEATURES")
+    print("=" * 80)
+
+    common_peaks_files = sorted(
+        Config.PATHS.INTERMEDIATE_SAMPLES.glob(
+            "*/ms1/common_peaks.parquet"
+        )
+    )
+
+    if not common_peaks_files:
+        raise FileNotFoundError(
+            "Aucun résultat intermédiaire d'échantillon trouvé "
+            f"dans {Config.PATHS.INTERMEDIATE_SAMPLES}. "
+            "Exécutez d'abord l'étape 'samples'."
+        )
+
+    database_file = (
+        Config.PATHS.INPUT_DATABASES
+        / Config.IDENTIFICATION.database_file
+    )
+
+    if not database_file.exists():
+        raise FileNotFoundError(
+            "Base de données d'identification non trouvée : "
+            f"{database_file}"
+        )
+
+    identifier = context.get("identifier")
+
+    if identifier is None:
+        identifier = CompoundIdentifier()
+        context["identifier"] = identifier
+
+    feature_output_dir = (
+        Config.PATHS.OUTPUT_DIR
+        / "feature_matrix"
+    )
+
+    feature_processor = FeatureProcessor()
+
+    feature_processor.create_feature_matrix(
+        input_dir=Config.PATHS.INTERMEDIATE_SAMPLES,
+        output_dir=feature_output_dir,
+        identifier=identifier,
+    )
+
+    feature_matrix_file = (
+        feature_output_dir
+        / "feature_matrix.parquet"
+    )
+
+    features_complete_file = (
+        feature_output_dir
+        / "features_complete.parquet"
+    )
+
+    if not feature_matrix_file.exists():
+        raise RuntimeError(
+            "La matrice de features n'a pas été produite : "
+            f"{feature_matrix_file}"
+        )
+
+    result = {
+        "sample_count": len(common_peaks_files),
+        "feature_output_dir": str(feature_output_dir),
+        "feature_matrix_file": str(feature_matrix_file),
+        "features_complete_file": (
+            str(features_complete_file)
+            if features_complete_file.exists()
+            else None
+        ),
+    }
+
+    context["step_results"]["feature_alignment"] = result
+
+    return result
+
+
 def _emit_progress(
     callback: Optional[Callable[[Dict[str, Any]], None]],
     *,
