@@ -610,8 +610,9 @@ def _emit_progress(
 
 def run_pipeline(
     base_dir: Union[str, Path, None] = None,
+    steps: Union[str, List[str], None] = None,
     progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
-) -> Dict[str, Union[str, int, float]]:
+) -> Dict[str, Union[str, int, float, List[str]]]:
     """
     Exécute la pipeline complète.
 
@@ -620,10 +621,15 @@ def run_pipeline(
             Dossier de travail contenant l'arborescence data/.
             Si aucune valeur n'est fournie, les chemins par défaut de Config
             sont conservés.
+        steps:
+            Étapes à exécuter. Une valeur absente ou égale à "all"
+            sélectionne la pipeline complète.
         progress_callback:
             Fonction optionnelle recevant les événements de progression sous
             forme de dictionnaires.
     """
+    selected_steps = normalize_steps(steps)
+
     if base_dir is not None:
         Config.set_base_dir(base_dir)
 
@@ -838,6 +844,7 @@ def run_pipeline(
             "base_dir": str(Config.PATHS.BASE_DIR),
             "output_dir": str(Config.PATHS.OUTPUT_DIR),
             "log_file": str(log_file),
+            "steps": selected_steps,
             "sample_count": len(replicate_groups),
             "duration_seconds": round(total_time, 3),
         }
