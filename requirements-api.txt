@@ -1,0 +1,7 @@
+# Couche HTTP de pipeline_identification_ms
+# Python 3.9
+
+fastapi==0.115.14
+uvicorn[standard]==0.34.3
+httpx==0.28.1
+pytest==8.4.2
