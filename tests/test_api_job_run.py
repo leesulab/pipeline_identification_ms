@@ -107,3 +107,123 @@ def test_run_unknown_job_returns_404(
     )
 
     assert response.status_code == 404
+
+
+def test_restart_interrupted_job(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Un job interrompu peut être relancé avec le même identifiant."""
+    from api.jobs import update_job
+
+    monkeypatch.setenv(
+        "PIPELINE_JOBS_DIR",
+        str(tmp_path / "jobs"),
+    )
+
+    create_response = client.post(
+        "/api/v1/jobs",
+        json={
+            "steps": ["file_discovery"],
+            "parameters": {
+                "project": "Relance après interruption",
+            },
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    created_job = create_response.json()
+    job_id = created_job["job_id"]
+    working_dir = created_job["working_dir"]
+
+    update_job(
+        job_id,
+        status="interrupted",
+        progress=0.4,
+        current_step=None,
+        message=(
+            "Le backend a été arrêté pendant "
+            "l'exécution du job."
+        ),
+        error={
+            "type": "JobInterruptedError",
+            "message": (
+                "Le backend a été arrêté pendant "
+                "l'exécution du job."
+            ),
+        },
+    )
+
+    run_response = client.post(
+        f"/api/v1/jobs/{job_id}/run"
+    )
+
+    assert run_response.status_code == 202
+
+    status_response = client.get(
+        f"/api/v1/jobs/{job_id}"
+    )
+
+    assert status_response.status_code == 200
+
+    restarted_job = status_response.json()
+
+    assert restarted_job["job_id"] == job_id
+    assert restarted_job["working_dir"] == working_dir
+    assert restarted_job["status"] == "success"
+    assert restarted_job["progress"] == 1.0
+    assert restarted_job["error"] is None
+    assert restarted_job["result"]["steps"] == [
+        "file_discovery"
+    ]
+
+
+def test_restart_failed_job(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Un job en erreur peut être relancé après correction de ses entrées."""
+    from api.jobs import update_job
+
+    monkeypatch.setenv(
+        "PIPELINE_JOBS_DIR",
+        str(tmp_path / "jobs"),
+    )
+
+    create_response = client.post(
+        "/api/v1/jobs",
+        json={
+            "steps": ["file_discovery"],
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    job_id = create_response.json()["job_id"]
+
+    update_job(
+        job_id,
+        status="error",
+        progress=0.2,
+        current_step=None,
+        message="Erreur simulée",
+        error={
+            "type": "RuntimeError",
+            "message": "Erreur simulée",
+        },
+    )
+
+    run_response = client.post(
+        f"/api/v1/jobs/{job_id}/run"
+    )
+
+    assert run_response.status_code == 202
+
+    restarted_job = client.get(
+        f"/api/v1/jobs/{job_id}"
+    ).json()
+
+    assert restarted_job["status"] == "success"
+    assert restarted_job["progress"] == 1.0
+    assert restarted_job["error"] is None
