@@ -13,7 +13,7 @@ import sys
 import time
 from tqdm import tqdm
 import matplotlib.pyplot as plt 
-from typing import Dict, Union, List
+from typing import Any, Callable, Dict, List, Optional, Union
 import psutil
 
 
@@ -527,8 +527,37 @@ def print_final_stats(results: Dict[str, SampleResult]) -> None:
     memory_info = process.memory_info()
     print(f"\nUtilisation mémoire finale: {memory_info.rss / 1024**3:.2f} GB")
 
+def _emit_progress(
+    callback: Optional[Callable[[Dict[str, Any]], None]],
+    *,
+    step: str,
+    status: str,
+    message: str,
+    progress: Optional[float],
+) -> None:
+    """Transmet un événement de progression sans dépendre d'une interface."""
+    if callback is None:
+        return
+
+    event = {
+        "step": step,
+        "status": status,
+        "message": message,
+        "progress": progress,
+    }
+
+    try:
+        callback(event)
+    except Exception as callback_error:
+        logger.warning(
+            "Erreur dans le callback de progression : %s",
+            callback_error,
+        )
+
+
 def run_pipeline(
-    base_dir: Union[str, Path, None] = None
+    base_dir: Union[str, Path, None] = None,
+    progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
 ) -> Dict[str, Union[str, int, float]]:
     """
     Exécute la pipeline complète.
@@ -538,6 +567,9 @@ def run_pipeline(
             Dossier de travail contenant l'arborescence data/.
             Si aucune valeur n'est fournie, les chemins par défaut de Config
             sont conservés.
+        progress_callback:
+            Fonction optionnelle recevant les événements de progression sous
+            forme de dictionnaires.
     """
     if base_dir is not None:
         Config.set_base_dir(base_dir)
@@ -547,6 +579,14 @@ def run_pipeline(
     start_time = time.time()
     print("\n🚀 DÉMARRAGE DE LA PIPELINE D'ANALYSE")
     print("=" * 80)
+
+    _emit_progress(
+        progress_callback,
+        step="pipeline",
+        status="running",
+        message="Démarrage de la pipeline",
+        progress=0.0,
+    )
 
     try:
         # Initialisation des handlers et processeurs
@@ -673,7 +713,7 @@ def run_pipeline(
         print(f"   • {len(replicate_groups)} échantillons traités")
         print("=" * 80)
 
-        return {
+        pipeline_result = {
             "status": "success",
             "base_dir": str(Config.PATHS.BASE_DIR),
             "output_dir": str(Config.PATHS.OUTPUT_DIR),
@@ -681,9 +721,26 @@ def run_pipeline(
             "duration_seconds": round(total_time, 3),
         }
 
+        _emit_progress(
+            progress_callback,
+            step="pipeline",
+            status="success",
+            message="Pipeline terminée",
+            progress=1.0,
+        )
+
+        return pipeline_result
+
     except Exception as e:
         print("\n❌ ERREUR DANS LA PIPELINE")
         logger.error(f"Erreur pipeline : {str(e)}")
+        _emit_progress(
+            progress_callback,
+            step="pipeline",
+            status="error",
+            message=str(e),
+            progress=None,
+        )
         raise
 
 def main() -> None:
