@@ -715,6 +715,126 @@ def get_or_discover_inputs(
     }
 
 
+def execute_file_discovery_step(
+    context: Dict[str, Any],
+    progress_callback: Optional[
+        Callable[[Dict[str, Any]], None]
+    ] = None,
+) -> Dict[str, Any]:
+    """Détecte les fichiers d'entrée et actualise le contexte."""
+    _emit_progress(
+        progress_callback,
+        step="file_discovery",
+        status="running",
+        message="Détection des fichiers d'entrée",
+        progress=0.20,
+    )
+
+    discovered = get_or_discover_inputs(
+        context,
+        require_samples=False,
+    )
+
+    result = {
+        "blank_file_count": len(
+            discovered["blank_files"]
+        ),
+        "sample_file_count": len(
+            discovered["sample_files"]
+        ),
+        "sample_count": len(
+            discovered["replicate_groups"]
+        ),
+    }
+
+    context["step_results"]["file_discovery"] = result
+
+    print("\n📁 Détection des fichiers")
+    print(
+        f"   • Blanks : {result['blank_file_count']}"
+    )
+    print(
+        "   • Fichiers échantillons : "
+        f"{result['sample_file_count']}"
+    )
+    print(
+        "   • Groupes d'échantillons : "
+        f"{result['sample_count']}"
+    )
+
+    return result
+
+
+def execute_blanks_step(
+    context: Dict[str, Any],
+    progress_callback: Optional[
+        Callable[[Dict[str, Any]], None]
+    ] = None,
+) -> Dict[str, Any]:
+    """Traite les blanks et conserve leur résultat dans le contexte."""
+    _emit_progress(
+        progress_callback,
+        step="blanks",
+        status="running",
+        message="Traitement des blanks",
+        progress=0.30,
+    )
+
+    discovered = get_or_discover_inputs(
+        context,
+        require_samples=False,
+    )
+    blank_files = discovered["blank_files"]
+
+    blank_peaks = pd.DataFrame()
+    blank_peaks_file = None
+
+    print("\n" + "=" * 80)
+    print("TRAITEMENT DES BLANKS")
+    print("=" * 80)
+
+    if blank_files:
+        blank_processor = BlankProcessor()
+
+        blank_peaks = (
+            blank_processor.process_blank_with_replicates(
+                blank_files[0].stem,
+                blank_files,
+                Config.PATHS.INTERMEDIATE_DIR / "blanks",
+            )
+        )
+
+        blank_peaks_file = save_blank_peaks(
+            blank_peaks
+        )
+
+        print(
+            "   ✓ Résultat sauvegardé : "
+            f"{blank_peaks_file}"
+        )
+    else:
+        print(
+            "   ℹ Aucun fichier blank trouvé. "
+            "Aucune soustraction ne sera nécessaire."
+        )
+
+    context["blank_peaks"] = blank_peaks
+
+    result = {
+        "blank_file_count": len(blank_files),
+        "blank_count": len(blank_peaks),
+        "blank_peaks_file": (
+            str(blank_peaks_file)
+            if blank_peaks_file is not None
+            else None
+        ),
+    }
+
+    context["step_results"]["blanks"] = result
+
+    return result
+
+
 def _emit_progress(
     callback: Optional[Callable[[Dict[str, Any]], None]],
     *,
