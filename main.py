@@ -886,10 +886,22 @@ def run_pipeline(
     selected_steps = normalize_steps(steps)
     full_pipeline_requested = steps is None or steps == "all"
 
-    if not full_pipeline_requested and len(selected_steps) > 1:
+    supported_composed_selections = {
+        ("file_discovery", "blanks"),
+    }
+
+    selected_steps_key = tuple(selected_steps)
+
+    if (
+        not full_pipeline_requested
+        and len(selected_steps) > 1
+        and selected_steps_key
+        not in supported_composed_selections
+    ):
         raise NotImplementedError(
-            "Les sélections composées ne sont pas encore activées. "
-            "Exécutez une seule étape, ou utilisez steps='all' "
+            "Cette sélection composée n'est pas encore activée : "
+            + ", ".join(selected_steps)
+            + ". Exécutez une seule étape, ou utilisez steps='all' "
             "pour la pipeline complète."
         )
 
@@ -916,6 +928,63 @@ def run_pipeline(
         replicate_handler = ReplicateHandler()
         blank_processor = BlankProcessor()
         feature_processor = FeatureProcessor()
+
+        if selected_steps == [
+            "file_discovery",
+            "blanks",
+        ]:
+            context = create_pipeline_context()
+
+            execute_file_discovery_step(
+                context,
+                progress_callback,
+            )
+
+            execute_blanks_step(
+                context,
+                progress_callback,
+            )
+
+            total_time = time.time() - start_time
+
+            discovery_result = context["step_results"][
+                "file_discovery"
+            ]
+            blanks_result = context["step_results"][
+                "blanks"
+            ]
+
+            pipeline_result = {
+                "status": "success",
+                "base_dir": str(Config.PATHS.BASE_DIR),
+                "output_dir": str(Config.PATHS.OUTPUT_DIR),
+                "log_file": str(log_file),
+                "steps": selected_steps,
+                "sample_count": discovery_result[
+                    "sample_count"
+                ],
+                "blank_file_count": blanks_result[
+                    "blank_file_count"
+                ],
+                "blank_count": blanks_result[
+                    "blank_count"
+                ],
+                "blank_peaks_file": blanks_result[
+                    "blank_peaks_file"
+                ],
+                "step_results": context["step_results"],
+                "duration_seconds": round(total_time, 3),
+            }
+
+            _emit_progress(
+                progress_callback,
+                step="pipeline",
+                status="success",
+                message="Étapes sélectionnées terminées",
+                progress=1.0,
+            )
+
+            return pipeline_result
 
         if selected_steps == ["file_discovery"]:
             _emit_progress(
