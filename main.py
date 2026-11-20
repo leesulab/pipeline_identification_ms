@@ -955,6 +955,113 @@ def run_pipeline(
 
             return pipeline_result
 
+        if selected_steps == ["feature_alignment"]:
+            _emit_progress(
+                progress_callback,
+                step="feature_alignment",
+                status="running",
+                message="Alignement des features et identification",
+                progress=0.70,
+            )
+
+            print("\n" + "=" * 80)
+            print("ALIGNEMENT AUTONOME DES FEATURES")
+            print("=" * 80)
+
+            common_peaks_files = sorted(
+                Config.PATHS.INTERMEDIATE_SAMPLES.glob(
+                    "*/ms1/common_peaks.parquet"
+                )
+            )
+
+            if not common_peaks_files:
+                raise FileNotFoundError(
+                    "Aucun résultat intermédiaire d'échantillon trouvé "
+                    "dans "
+                    f"{Config.PATHS.INTERMEDIATE_SAMPLES}. "
+                    "Exécutez d'abord l'étape 'samples'."
+                )
+
+            database_file = (
+                Config.PATHS.INPUT_DATABASES
+                / Config.IDENTIFICATION.database_file
+            )
+
+            if not database_file.exists():
+                raise FileNotFoundError(
+                    "Base de données d'identification non trouvée : "
+                    f"{database_file}"
+                )
+
+            print(
+                "   • Résultats intermédiaires détectés : "
+                f"{len(common_peaks_files)}"
+            )
+            print(
+                "   • Base d'identification : "
+                f"{database_file.name}"
+            )
+
+            identifier = CompoundIdentifier()
+            feature_output_dir = (
+                Config.PATHS.OUTPUT_DIR
+                / "feature_matrix"
+            )
+
+            feature_processor.create_feature_matrix(
+                input_dir=Config.PATHS.INTERMEDIATE_SAMPLES,
+                output_dir=feature_output_dir,
+                identifier=identifier,
+            )
+
+            feature_matrix_file = (
+                feature_output_dir
+                / "feature_matrix.parquet"
+            )
+            features_complete_file = (
+                feature_output_dir
+                / "features_complete.parquet"
+            )
+
+            if not feature_matrix_file.exists():
+                raise RuntimeError(
+                    "La matrice de features n'a pas été produite : "
+                    f"{feature_matrix_file}"
+                )
+
+            total_time = time.time() - start_time
+
+            pipeline_result = {
+                "status": "success",
+                "base_dir": str(Config.PATHS.BASE_DIR),
+                "output_dir": str(Config.PATHS.OUTPUT_DIR),
+                "feature_output_dir": str(
+                    feature_output_dir
+                ),
+                "feature_matrix_file": str(
+                    feature_matrix_file
+                ),
+                "features_complete_file": (
+                    str(features_complete_file)
+                    if features_complete_file.exists()
+                    else None
+                ),
+                "log_file": str(log_file),
+                "steps": selected_steps,
+                "sample_count": len(common_peaks_files),
+                "duration_seconds": round(total_time, 3),
+            }
+
+            _emit_progress(
+                progress_callback,
+                step="pipeline",
+                status="success",
+                message="Étapes sélectionnées terminées",
+                progress=1.0,
+            )
+
+            return pipeline_result
+
         # 1. Chargement des données de calibration CCS
         _emit_progress(
             progress_callback,
