@@ -715,6 +715,14 @@ def run_pipeline(
             forme de dictionnaires.
     """
     selected_steps = normalize_steps(steps)
+    full_pipeline_requested = steps is None or steps == "all"
+
+    if not full_pipeline_requested and len(selected_steps) > 1:
+        raise NotImplementedError(
+            "Les sélections composées ne sont pas encore activées. "
+            "Exécutez une seule étape, ou utilisez steps='all' "
+            "pour la pipeline complète."
+        )
 
     if base_dir is not None:
         Config.set_base_dir(base_dir)
