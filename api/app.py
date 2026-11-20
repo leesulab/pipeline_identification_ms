@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse
 from api.jobs import (
     create_job,
     get_job_dir,
+    list_jobs,
     read_job,
     run_job,
 )
@@ -107,6 +108,19 @@ def health() -> HealthResponse:
 def list_steps() -> List[str]:
     """Liste les étapes disponibles dans leur ordre canonique."""
     return list(PIPELINE_STEPS)
+
+
+@app.get(
+    "/api/v1/jobs",
+    response_model=List[JobResponse],
+    tags=["Jobs"],
+)
+def list_pipeline_jobs() -> List[JobResponse]:
+    """Liste les jobs persistants du plus récent au plus ancien."""
+    return [
+        JobResponse(**job)
+        for job in list_jobs()
+    ]
 
 
 @app.post(

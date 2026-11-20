@@ -209,3 +209,33 @@ def run_job(
             result=None,
         )
         raise
+
+
+def list_jobs() -> List[Dict[str, Any]]:
+    """Liste les jobs persistants, du plus récent au plus ancien."""
+    jobs_dir = get_jobs_dir()
+
+    if not jobs_dir.exists():
+        return []
+
+    jobs = []
+
+    for job_file in jobs_dir.glob("*/job.json"):
+        try:
+            job = json.loads(
+                job_file.read_text(encoding="utf-8")
+            )
+        except (
+            OSError,
+            json.JSONDecodeError,
+        ):
+            continue
+
+        jobs.append(job)
+
+    jobs.sort(
+        key=lambda job: job.get("created_at", ""),
+        reverse=True,
+    )
+
+    return jobs
