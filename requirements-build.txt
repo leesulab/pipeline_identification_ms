@@ -1,0 +1,4 @@
+# Outils de construction du sidecar autonome
+# Non requis lors de l'exécution de l'application.
+
+pyinstaller==6.22.3

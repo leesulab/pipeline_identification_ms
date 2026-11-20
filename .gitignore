@@ -12,3 +12,11 @@ __pycache__/
 
 # Jobs locaux de l'API
 jobs/
+
+# Artefacts PyInstaller
+build/pyinstaller/
+build/pyinstaller-onefile/
+dist/pipeline-api-sidecar/
+dist/tauri-sidecar/
+pipeline-api-sidecar.spec
+pipeline-api-sidecar-*.spec
