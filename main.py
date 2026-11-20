@@ -1092,6 +1092,73 @@ def execute_visualizations_step(
     return result
 
 
+def execute_similarities_step(
+    context: Dict[str, Any],
+    progress_callback: Optional[
+        Callable[[Dict[str, Any]], None]
+    ] = None,
+) -> Dict[str, Any]:
+    """Analyse les similarités depuis les identifications existantes."""
+    _emit_progress(
+        progress_callback,
+        step="similarities",
+        status="running",
+        message="Analyse des similarités",
+        progress=0.90,
+    )
+
+    print("\n" + "=" * 80)
+    print("ANALYSE DES SIMILARITÉS")
+    print("=" * 80)
+
+    output_dir = Config.PATHS.OUTPUT_DIR
+    features_complete_file = (
+        output_dir
+        / "feature_matrix"
+        / "features_complete.parquet"
+    )
+
+    if not features_complete_file.exists():
+        raise FileNotFoundError(
+            "Résultat d'identification introuvable : "
+            f"{features_complete_file}. "
+            "Exécutez d'abord l'étape 'feature_alignment'."
+        )
+
+    existing_files = {
+        path.resolve()
+        for path in output_dir.rglob("*")
+        if path.is_file()
+    }
+
+    analyze_and_save_clusters(output_dir)
+
+    current_files = {
+        path.resolve()
+        for path in output_dir.rglob("*")
+        if path.is_file()
+    }
+
+    generated_files = sorted(
+        str(path)
+        for path in current_files - existing_files
+    )
+
+    context["generated_files"].extend(generated_files)
+
+    result = {
+        "features_complete_file": str(
+            features_complete_file
+        ),
+        "generated_similarity_files": generated_files,
+        "similarity_file_count": len(generated_files),
+    }
+
+    context["step_results"]["similarities"] = result
+
+    return result
+
+
 def _emit_progress(
     callback: Optional[Callable[[Dict[str, Any]], None]],
     *,
