@@ -715,6 +715,53 @@ def get_or_discover_inputs(
     }
 
 
+def execute_calibration_step(
+    context: Dict[str, Any],
+    progress_callback: Optional[
+        Callable[[Dict[str, Any]], None]
+    ] = None,
+) -> Dict[str, Any]:
+    """Charge la calibration CCS dans le contexte partagé."""
+    _emit_progress(
+        progress_callback,
+        step="calibration",
+        status="running",
+        message="Chargement de la calibration CCS",
+        progress=0.05,
+    )
+
+    calibration_file = (
+        Config.PATHS.INPUT_CALIBRANTS
+        / "CCS_calibration_data.csv"
+    )
+
+    if not calibration_file.exists():
+        raise FileNotFoundError(
+            "Fichier de calibration non trouvé : "
+            f"{calibration_file}"
+        )
+
+    calibrator = context.get("calibrator")
+
+    if calibrator is None:
+        calibrator = CCSCalibrator(calibration_file)
+        context["calibrator"] = calibrator
+
+    result = {
+        "calibration_file": str(calibration_file),
+        "loaded": True,
+    }
+
+    context["step_results"]["calibration"] = result
+
+    print(
+        "   ✓ Calibration CCS chargée : "
+        f"{calibration_file.name}"
+    )
+
+    return result
+
+
 def execute_file_discovery_step(
     context: Dict[str, Any],
     progress_callback: Optional[
@@ -1227,6 +1274,7 @@ def execute_categories_step(
 
 
 STEP_EXECUTORS = {
+    "calibration": execute_calibration_step,
     "file_discovery": execute_file_discovery_step,
     "blanks": execute_blanks_step,
     "samples": execute_samples_step,
