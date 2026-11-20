@@ -239,3 +239,44 @@ def list_jobs() -> List[Dict[str, Any]]:
     )
 
     return jobs
+
+
+def recover_interrupted_jobs() -> List[Dict[str, Any]]:
+    """
+    Marque comme interrompus les jobs laissés en cours par un ancien
+    processus du backend.
+    """
+    recovered_jobs = []
+
+    for job in list_jobs():
+        if job.get("status") != "running":
+            continue
+
+        job_id = job.get("job_id")
+
+        if not isinstance(job_id, str) or not job_id:
+            continue
+
+        recovered_job = update_job(
+            job_id,
+            status="interrupted",
+            progress=job.get("progress", 0.0),
+            current_step=None,
+            message=(
+                "Le backend a été arrêté pendant "
+                "l'exécution du job."
+            ),
+            completed_at=utc_now(),
+            error={
+                "type": "JobInterruptedError",
+                "message": (
+                    "Le backend a été arrêté pendant "
+                    "l'exécution du job."
+                ),
+            },
+            result=None,
+        )
+
+        recovered_jobs.append(recovered_job)
+
+    return recovered_jobs

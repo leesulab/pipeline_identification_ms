@@ -10,6 +10,8 @@ from typing import Dict, Union
 
 import uvicorn
 
+from api.jobs import recover_interrupted_jobs
+
 
 LOCAL_HOST = "127.0.0.1"
 
@@ -125,6 +127,14 @@ def main() -> None:
         jobs_dir = arguments.jobs_dir.expanduser().resolve()
         jobs_dir.mkdir(parents=True, exist_ok=True)
         os.environ["PIPELINE_JOBS_DIR"] = str(jobs_dir)
+
+    interrupted_jobs = recover_interrupted_jobs()
+
+    if interrupted_jobs:
+        print(
+            f"{len(interrupted_jobs)} job(s) interrompu(s) récupéré(s).",
+            flush=True,
+        )
 
     connection_info = create_connection_info(
         port=port,
