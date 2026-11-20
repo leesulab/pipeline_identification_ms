@@ -527,7 +527,9 @@ def print_final_stats(results: Dict[str, SampleResult]) -> None:
     memory_info = process.memory_info()
     print(f"\nUtilisation mémoire finale: {memory_info.rss / 1024**3:.2f} GB")
 
-def run_pipeline(base_dir: Union[str, Path, None] = None) -> None:
+def run_pipeline(
+    base_dir: Union[str, Path, None] = None
+) -> Dict[str, Union[str, int, float]]:
     """
     Exécute la pipeline complète.
 
@@ -670,6 +672,14 @@ def run_pipeline(base_dir: Union[str, Path, None] = None) -> None:
             print(f"   • Temps de calcul total: {seconds} sec")
         print(f"   • {len(replicate_groups)} échantillons traités")
         print("=" * 80)
+
+        return {
+            "status": "success",
+            "base_dir": str(Config.PATHS.BASE_DIR),
+            "output_dir": str(Config.PATHS.OUTPUT_DIR),
+            "sample_count": len(replicate_groups),
+            "duration_seconds": round(total_time, 3),
+        }
 
     except Exception as e:
         print("\n❌ ERREUR DANS LA PIPELINE")
