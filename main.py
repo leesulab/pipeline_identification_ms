@@ -762,6 +762,54 @@ def execute_calibration_step(
     return result
 
 
+def execute_identification_step(
+    context: Dict[str, Any],
+    progress_callback: Optional[
+        Callable[[Dict[str, Any]], None]
+    ] = None,
+) -> Dict[str, Any]:
+    """Charge la base d'identification dans le contexte partagé."""
+    _emit_progress(
+        progress_callback,
+        step="identification",
+        status="running",
+        message="Chargement de la base d'identification",
+        progress=0.12,
+    )
+
+    database_file = (
+        Config.PATHS.INPUT_DATABASES
+        / Config.IDENTIFICATION.database_file
+    )
+
+    if not database_file.exists():
+        raise FileNotFoundError(
+            "Base de données d'identification non trouvée : "
+            f"{database_file}"
+        )
+
+    identifier = context.get("identifier")
+
+    if identifier is None:
+        identifier = CompoundIdentifier()
+        context["identifier"] = identifier
+
+    result = {
+        "database_file": str(database_file),
+        "compound_count": len(identifier.db),
+        "loaded": True,
+    }
+
+    context["step_results"]["identification"] = result
+
+    print(
+        "   ✓ Base d'identification chargée : "
+        f"{len(identifier.db)} composés"
+    )
+
+    return result
+
+
 def execute_file_discovery_step(
     context: Dict[str, Any],
     progress_callback: Optional[
@@ -1275,6 +1323,7 @@ def execute_categories_step(
 
 STEP_EXECUTORS = {
     "calibration": execute_calibration_step,
+    "identification": execute_identification_step,
     "file_discovery": execute_file_discovery_step,
     "blanks": execute_blanks_step,
     "samples": execute_samples_step,
