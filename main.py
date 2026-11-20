@@ -55,16 +55,23 @@ pd.options.mode.chained_assignment = None
 # Initialiser le logger
 logger = logging.getLogger(__name__)
 
-def setup_logging() -> None:
-    """Configure le système de logging."""
-    log_dir = Path("logs")
-    log_dir.mkdir(exist_ok=True)
+def setup_logging(log_dir: Union[str, Path, None] = None) -> Path:
+    """Configure le logging dans le dossier de travail de la pipeline."""
+    if log_dir is None:
+        log_dir = Config.PATHS.BASE_DIR / "logs"
+
+    log_dir = Path(log_dir).expanduser().resolve()
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "pipeline.log"
+
     logging.basicConfig(
-        filename=log_dir / "peak_detection.log",
+        filename=log_file,
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         force=True
     )
+
+    return log_file
 
 class CaptureOutput:
     """Capture la sortie standard pour chaque processus."""
@@ -575,7 +582,7 @@ def run_pipeline(
         Config.set_base_dir(base_dir)
 
     Config.setup_directories()
-    setup_logging()
+    log_file = setup_logging()
     start_time = time.time()
     print("\n🚀 DÉMARRAGE DE LA PIPELINE D'ANALYSE")
     print("=" * 80)
@@ -784,6 +791,7 @@ def run_pipeline(
             "status": "success",
             "base_dir": str(Config.PATHS.BASE_DIR),
             "output_dir": str(Config.PATHS.OUTPUT_DIR),
+            "log_file": str(log_file),
             "sample_count": len(replicate_groups),
             "duration_seconds": round(total_time, 3),
         }
