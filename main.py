@@ -634,6 +634,38 @@ def load_optional_blank_peaks(
     return pd.DataFrame()
 
 
+def discover_input_files(
+    require_samples: bool = True,
+) -> Dict[str, Any]:
+    """Détecte les blanks et regroupe les réplicats d'échantillons."""
+    blank_files = sorted(
+        Config.PATHS.INPUT_BLANKS.glob("*.parquet")
+    )
+    sample_files = sorted(
+        Config.PATHS.INPUT_SAMPLES.glob("*.parquet")
+    )
+
+    if require_samples and not sample_files:
+        raise ValueError(
+            "Aucun fichier d'échantillon trouvé dans "
+            f"{Config.PATHS.INPUT_SAMPLES}"
+        )
+
+    replicate_groups = {}
+
+    if sample_files:
+        replicate_handler = ReplicateHandler()
+        replicate_groups = replicate_handler.group_replicates(
+            sample_files
+        )
+
+    return {
+        "blank_files": blank_files,
+        "sample_files": sample_files,
+        "replicate_groups": replicate_groups,
+    }
+
+
 def _emit_progress(
     callback: Optional[Callable[[Dict[str, Any]], None]],
     *,
