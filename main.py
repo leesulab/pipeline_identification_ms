@@ -666,6 +666,55 @@ def discover_input_files(
     }
 
 
+def create_pipeline_context() -> Dict[str, Any]:
+    """Crée le contexte partagé entre les étapes sélectionnées."""
+    return {
+        "blank_files": None,
+        "sample_files": None,
+        "replicate_groups": None,
+        "blank_peaks": None,
+        "calibrator": None,
+        "identifier": None,
+        "sample_results": None,
+        "generated_files": [],
+        "step_results": {},
+    }
+
+
+def get_or_discover_inputs(
+    context: Dict[str, Any],
+    *,
+    require_samples: bool,
+) -> Dict[str, Any]:
+    """Réutilise l'inventaire existant ou détecte les entrées."""
+    replicate_groups = context.get("replicate_groups")
+
+    if replicate_groups is None:
+        discovered = discover_input_files(
+            require_samples=require_samples
+        )
+
+        context["blank_files"] = discovered["blank_files"]
+        context["sample_files"] = discovered["sample_files"]
+        context["replicate_groups"] = discovered[
+            "replicate_groups"
+        ]
+
+    elif require_samples and not replicate_groups:
+        raise ValueError(
+            "Aucun fichier d'échantillon trouvé dans "
+            f"{Config.PATHS.INPUT_SAMPLES}"
+        )
+
+    return {
+        "blank_files": context["blank_files"] or [],
+        "sample_files": context["sample_files"] or [],
+        "replicate_groups": (
+            context["replicate_groups"] or {}
+        ),
+    }
+
+
 def _emit_progress(
     callback: Optional[Callable[[Dict[str, Any]], None]],
     *,
