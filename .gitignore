@@ -6,3 +6,6 @@ data/input/databases/norman_all_ccs_all_rt_pos_neg_with_ms2_old.h5
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Environnement virtuel local
+.venv/
