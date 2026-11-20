@@ -2,11 +2,20 @@
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import (
+    BackgroundTasks,
+    FastAPI,
+    HTTPException,
+    status,
+)
 from pydantic import BaseModel, Field
 
-from api.jobs import create_job, read_job
-from main import PIPELINE_STEPS, normalize_steps
+from api.jobs import create_job, read_job, run_job
+from main import (
+    PIPELINE_STEPS,
+    normalize_steps,
+    run_pipeline,
+)
 
 
 class HealthResponse(BaseModel):
@@ -40,7 +49,7 @@ class JobResponse(BaseModel):
     updated_at: str
     started_at: Optional[str]
     completed_at: Optional[str]
-    error: Optional[str]
+    error: Optional[Dict[str, Any]]
     result: Optional[Dict[str, Any]]
     working_dir: str
 
@@ -100,6 +109,57 @@ def create_pipeline_job(
     job = create_job(
         steps=selected_steps,
         parameters=request.parameters,
+    )
+
+    return JobResponse(**job)
+
+
+def execute_job_in_background(job_id: str) -> None:
+    """Exécute un job et conserve l'erreur dans son état persistant."""
+    try:
+        run_job(
+            job_id,
+            run_pipeline,
+        )
+    except Exception:
+        # run_job a déjà persisté le statut et le détail de l'erreur.
+        return
+
+
+@app.post(
+    "/api/v1/jobs/{job_id}/run",
+    response_model=JobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Jobs"],
+)
+def start_pipeline_job(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+) -> JobResponse:
+    """Planifie l'exécution d'un job existant."""
+    try:
+        job = read_job(job_id)
+    except FileNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+
+    if job["status"] == "running":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Le job {job_id} est déjà en cours.",
+        )
+
+    if job["status"] == "success":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Le job {job_id} est déjà terminé.",
+        )
+
+    background_tasks.add_task(
+        execute_job_in_background,
+        job_id,
     )
 
     return JobResponse(**job)
