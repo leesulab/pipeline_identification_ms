@@ -20,6 +20,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
 from api.pipeline_schema import build_pipeline_schema
+from api.pipeline_validation import (
+    validate_pipeline_configuration,
+)
 
 from api.jobs import (
     create_job,
@@ -50,6 +53,22 @@ class PipelineParameterSchema(BaseModel):
     step: Optional[float] = None
     choices: Optional[List[str]] = None
     group: Optional[str] = None
+
+
+class ConfigurationValidationRequest(BaseModel):
+    """Configuration partielle envoyée par l’application."""
+
+    configuration: Dict[str, Dict[str, Any]] = Field(
+        default_factory=dict
+    )
+
+
+class ConfigurationValidationResponse(BaseModel):
+    """Résultat de validation et configuration normalisée."""
+
+    valid: bool
+    configuration: Dict[str, Dict[str, Any]]
+    errors: List[str]
 
 
 class PipelineSectionSchema(BaseModel):
@@ -147,6 +166,26 @@ def get_pipeline_schema() -> PipelineSchemaResponse:
     """Expose les sections, paramètres et valeurs par défaut."""
     return PipelineSchemaResponse(
         **build_pipeline_schema()
+    )
+
+
+@app.post(
+    "/api/v1/pipeline/configuration/validate",
+    response_model=ConfigurationValidationResponse,
+    tags=["Pipeline"],
+)
+def validate_configuration(
+    request: ConfigurationValidationRequest,
+) -> ConfigurationValidationResponse:
+    """Valide et complète une configuration de pipeline."""
+    normalized, errors = validate_pipeline_configuration(
+        request.configuration
+    )
+
+    return ConfigurationValidationResponse(
+        valid=not errors,
+        configuration=normalized,
+        errors=errors,
     )
 
 
