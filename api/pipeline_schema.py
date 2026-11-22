@@ -3,6 +3,10 @@
 from dataclasses import fields
 from typing import Any, Dict, List, Type
 
+from api.pipeline_metadata import (
+    get_parameter_metadata,
+)
+
 from scripts.config.config import (
     BlankReplicateConfig,
     BlankSubtractionConfig,
@@ -102,17 +106,24 @@ def flatten_parameter(
 
         return parameters
 
-    return [
-        {
-            "path": name,
-            "label": default_label(
+    metadata = get_parameter_metadata(name)
+
+    parameter = {
+        "path": name,
+        "label": metadata.pop(
+            "label",
+            default_label(
                 name.split(".")[-1]
             ),
-            "type": parameter_type(value),
-            "default": value,
-            "required": True,
-        }
-    ]
+        ),
+        "type": parameter_type(value),
+        "default": value,
+        "required": True,
+    }
+
+    parameter.update(metadata)
+
+    return [parameter]
 
 
 def build_section_schema(

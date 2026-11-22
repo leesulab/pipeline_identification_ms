@@ -43,6 +43,13 @@ class PipelineParameterSchema(BaseModel):
     type: str
     default: Any
     required: bool
+    description: Optional[str] = None
+    unit: Optional[str] = None
+    minimum: Optional[float] = None
+    maximum: Optional[float] = None
+    step: Optional[float] = None
+    choices: Optional[List[str]] = None
+    group: Optional[str] = None
 
 
 class PipelineSectionSchema(BaseModel):

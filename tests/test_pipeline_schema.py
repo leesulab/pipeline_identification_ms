@@ -55,3 +55,48 @@ def test_pipeline_schema_preserves_defaults() -> None:
     assert defaults["tolerances.mz_ppm"] == 5
     assert defaults["weights.mz"] == 0.4
     assert defaults["ms2_score_threshold"] == 0.2
+
+
+def test_pipeline_schema_contains_scientific_metadata() -> None:
+    schema = build_pipeline_schema()
+
+    parameters = {
+        parameter["path"]: parameter
+        for section in schema["sections"]
+        for parameter in section["parameters"]
+    }
+
+    assert parameters["mz_ppm"]["unit"] == "ppm"
+    assert parameters["mz_ppm"]["minimum"] == 0.01
+    assert parameters["dt_tolerance"]["unit"] == "ms"
+    assert parameters["rt_tolerance"]["unit"] == "min"
+
+    assert (
+        parameters["tolerances.ccs_percent"]["unit"]
+        == "%"
+    )
+
+    assert parameters["weights.mz"]["minimum"] == 0.0
+    assert parameters["weights.mz"]["maximum"] == 1.0
+
+
+def test_pipeline_schema_contains_choice_lists() -> None:
+    schema = build_pipeline_schema()
+
+    parameters = {
+        parameter["path"]: parameter
+        for section in schema["sections"]
+        for parameter in section["parameters"]
+    }
+
+    assert parameters["algorithm"]["choices"] == [
+        "kd_tree",
+        "ball_tree",
+        "brute",
+        "auto",
+    ]
+
+    assert parameters["database_key"]["choices"] == [
+        "positive",
+        "negative",
+    ]
