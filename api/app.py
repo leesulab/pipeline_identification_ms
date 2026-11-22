@@ -19,6 +19,8 @@ from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
+from api.pipeline_schema import build_pipeline_schema
+
 from api.jobs import (
     create_job,
     get_job_dir,
@@ -31,6 +33,32 @@ from main import (
     normalize_steps,
     run_pipeline,
 )
+
+
+class PipelineParameterSchema(BaseModel):
+    """Paramètre éditable d’une section de configuration."""
+
+    path: str
+    label: str
+    type: str
+    default: Any
+    required: bool
+
+
+class PipelineSectionSchema(BaseModel):
+    """Section configurable de la pipeline."""
+
+    id: str
+    label: str
+    class_name: str
+    parameters: List[PipelineParameterSchema]
+
+
+class PipelineSchemaResponse(BaseModel):
+    """Schéma dynamique consommé par l’application desktop."""
+
+    version: int
+    sections: List[PipelineSectionSchema]
 
 
 class HealthResponse(BaseModel):
@@ -100,6 +128,18 @@ def health() -> HealthResponse:
         status="ok",
         service="pipeline-identification-ms",
         version=app.version,
+    )
+
+
+@app.get(
+    "/api/v1/pipeline/schema",
+    response_model=PipelineSchemaResponse,
+    tags=["Pipeline"],
+)
+def get_pipeline_schema() -> PipelineSchemaResponse:
+    """Expose les sections, paramètres et valeurs par défaut."""
+    return PipelineSchemaResponse(
+        **build_pipeline_schema()
     )
 
 
