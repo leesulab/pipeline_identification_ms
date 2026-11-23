@@ -20,6 +20,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
 from api.pipeline_schema import build_pipeline_schema
+from api.pipeline_presets import (
+    build_default_preset,
+    validate_pipeline_preset,
+)
 from api.pipeline_validation import (
     validate_pipeline_configuration,
 )
@@ -68,6 +72,33 @@ class ConfigurationValidationResponse(BaseModel):
 
     valid: bool
     configuration: Dict[str, Dict[str, Any]]
+    errors: List[str]
+
+
+class PipelinePreset(BaseModel):
+    """Preset versionné de configuration de pipeline."""
+
+    format_version: int
+    schema_version: int
+    id: Optional[str] = None
+    name: str
+    description: str
+    built_in: bool
+    created_at: Optional[str]
+    configuration: Dict[str, Dict[str, Any]]
+
+
+class PipelinePresetValidationRequest(BaseModel):
+    """Preset JSON à valider avant son import."""
+
+    preset: Dict[str, Any]
+
+
+class PipelinePresetValidationResponse(BaseModel):
+    """Résultat de la validation d’un preset."""
+
+    valid: bool
+    preset: Optional[PipelinePreset] = None
     errors: List[str]
 
 
@@ -166,6 +197,42 @@ def get_pipeline_schema() -> PipelineSchemaResponse:
     """Expose les sections, paramètres et valeurs par défaut."""
     return PipelineSchemaResponse(
         **build_pipeline_schema()
+    )
+
+
+@app.get(
+    "/api/v1/pipeline/presets",
+    response_model=List[PipelinePreset],
+    tags=["Pipeline"],
+)
+def list_pipeline_presets() -> List[PipelinePreset]:
+    """Liste les presets intégrés au moteur."""
+    return [
+        PipelinePreset(**build_default_preset())
+    ]
+
+
+@app.post(
+    "/api/v1/pipeline/presets/validate",
+    response_model=PipelinePresetValidationResponse,
+    tags=["Pipeline"],
+)
+def validate_preset(
+    request: PipelinePresetValidationRequest,
+) -> PipelinePresetValidationResponse:
+    """Valide et normalise un preset JSON importé."""
+    normalized, errors = validate_pipeline_preset(
+        request.preset
+    )
+
+    return PipelinePresetValidationResponse(
+        valid=not errors,
+        preset=(
+            PipelinePreset(**normalized)
+            if normalized is not None
+            else None
+        ),
+        errors=errors,
     )
 
 
