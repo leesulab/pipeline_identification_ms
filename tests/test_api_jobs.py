@@ -44,9 +44,29 @@ def test_create_and_get_job(
         "blanks",
     ]
     assert created_job["progress"] == 0.0
-    assert created_job["parameters"] == {
-        "project": "test-api",
-    }
+    parameters = created_job["parameters"]
+
+    assert parameters["project"] == "test-api"
+
+    pipeline_configuration = parameters[
+        "pipeline_configuration"
+    ]
+
+    assert len(pipeline_configuration) == 9
+    assert (
+        pipeline_configuration["PEAK_DETECTION"]
+        ["threshold"]
+        == 100
+    )
+    assert (
+        pipeline_configuration["IDENTIFICATION"]
+        ["weights"]
+        == {
+            "mz": 0.4,
+            "ccs": 0.4,
+            "rt": 0.2,
+        }
+    )
 
     job_dir = tmp_path / "jobs" / job_id
     job_file = job_dir / "job.json"

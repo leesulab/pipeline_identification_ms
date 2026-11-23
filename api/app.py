@@ -230,9 +230,38 @@ def create_pipeline_job(
             detail=str(error),
         ) from error
 
+    parameters = dict(request.parameters)
+
+    submitted_configuration = parameters.get(
+        "pipeline_configuration",
+        {},
+    )
+
+    normalized_configuration, configuration_errors = (
+        validate_pipeline_configuration(
+            submitted_configuration
+        )
+    )
+
+    if configuration_errors:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "message": (
+                    "La configuration de la pipeline "
+                    "est invalide."
+                ),
+                "errors": configuration_errors,
+            },
+        )
+
+    parameters["pipeline_configuration"] = (
+        normalized_configuration
+    )
+
     job = create_job(
         steps=selected_steps,
-        parameters=request.parameters,
+        parameters=parameters,
     )
 
     return JobResponse(**job)
