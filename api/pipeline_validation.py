@@ -24,6 +24,40 @@ def _set_nested_value(
     current[parts[-1]] = value
 
 
+def _flatten_configuration_values(
+    values: Dict[str, Any],
+    prefix: str = "",
+) -> Dict[str, Any]:
+    """
+    Aplatit une section normalisée en chemins pointés.
+
+    Les chemins déjà pointés sont conservés. Cette fonction permet
+    d'accepter aussi bien :
+
+        {"weights.mz": 0.4}
+
+    que :
+
+        {"weights": {"mz": 0.4}}
+    """
+    flattened: Dict[str, Any] = {}
+
+    for name, value in values.items():
+        path = f"{prefix}.{name}" if prefix else name
+
+        if isinstance(value, dict):
+            flattened.update(
+                _flatten_configuration_values(
+                    value,
+                    path,
+                )
+            )
+        else:
+            flattened[path] = value
+
+    return flattened
+
+
 def _valid_type(
     value: Any,
     expected_type: str,
@@ -76,7 +110,21 @@ def validate_pipeline_configuration(
 
     for section in schema["sections"]:
         section_id = section["id"]
-        submitted = configuration.get(section_id, {})
+        submitted_value = configuration.get(
+            section_id,
+            {},
+        )
+
+        if not isinstance(submitted_value, dict):
+            errors.append(
+                f"{section_id} : la section doit être un objet."
+            )
+            submitted_value = {}
+
+        submitted = _flatten_configuration_values(
+            submitted_value
+        )
+
         normalized_section: Dict[str, Any] = {}
 
         known_paths = {

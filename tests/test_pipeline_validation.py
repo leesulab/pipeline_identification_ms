@@ -207,3 +207,61 @@ def test_unknown_sections_and_parameters_are_rejected() -> None:
         "paramètre inconnu."
         in errors
     )
+
+
+def test_normalized_nested_configuration_is_accepted() -> None:
+    first_normalized, first_errors = (
+        validate_pipeline_configuration(
+            {
+                "PEAK_DETECTION": {
+                    "threshold": 275,
+                },
+                "IDENTIFICATION": {
+                    "weights.mz": 0.5,
+                    "weights.ccs": 0.3,
+                    "weights.rt": 0.2,
+                },
+            }
+        )
+    )
+
+    assert first_errors == []
+
+    second_normalized, second_errors = (
+        validate_pipeline_configuration(
+            first_normalized
+        )
+    )
+
+    assert second_errors == []
+    assert second_normalized == first_normalized
+
+    assert (
+        second_normalized["PEAK_DETECTION"]
+        ["smooth_radius"]
+        == {
+            "mz": 0,
+            "drift_time": 1,
+            "retention_time": 0,
+        }
+    )
+
+    assert (
+        second_normalized["IDENTIFICATION"]
+        ["tolerances"]
+        == {
+            "mz_ppm": 5.0,
+            "ccs_percent": 8.0,
+            "rt_min": 0.1,
+        }
+    )
+
+    assert (
+        second_normalized["IDENTIFICATION"]
+        ["weights"]
+        == {
+            "mz": 0.5,
+            "ccs": 0.3,
+            "rt": 0.2,
+        }
+    )
