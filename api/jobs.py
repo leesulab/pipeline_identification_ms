@@ -5,6 +5,11 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from api.pipeline_runtime import (
+    pipeline_configuration_scope,
+)
+
 from uuid import uuid4
 
 
@@ -178,11 +183,20 @@ def run_job(
         update_job(job_id, **changes)
 
     try:
-        result = pipeline_runner(
-            base_dir=job["working_dir"],
-            steps=job["steps"],
-            progress_callback=progress_callback,
+        pipeline_configuration = (
+            job.get("parameters", {}).get(
+                "pipeline_configuration"
+            )
         )
+
+        with pipeline_configuration_scope(
+            pipeline_configuration
+        ):
+            result = pipeline_runner(
+                base_dir=job["working_dir"],
+                steps=job["steps"],
+                progress_callback=progress_callback,
+            )
 
         return update_job(
             job_id,
