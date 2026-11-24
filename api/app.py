@@ -24,6 +24,10 @@ from api.pipeline_presets import (
     build_default_preset,
     validate_pipeline_preset,
 )
+from api.result_manifest import (
+    build_result_manifest,
+)
+
 from api.pipeline_validation import (
     validate_pipeline_configuration,
 )
@@ -116,6 +120,27 @@ class PipelineSchemaResponse(BaseModel):
 
     version: int
     sections: List[PipelineSectionSchema]
+
+
+class JobResultEntry(BaseModel):
+    """Résultat scientifique présent dans un job."""
+
+    id: str
+    title: str
+    group: str
+    kind: str
+    format: str
+    relative_path: str
+    size_bytes: int
+    order: int
+
+
+class JobResultManifest(BaseModel):
+    """Manifeste versionné des résultats d’un job."""
+
+    version: int
+    job_id: str
+    results: List[JobResultEntry]
 
 
 class HealthResponse(BaseModel):
@@ -592,6 +617,31 @@ def classify_job_file(relative_path: Path) -> str:
         return "state"
 
     return "metadata"
+
+
+@app.get(
+    "/api/v1/jobs/{job_id}/results",
+    response_model=JobResultManifest,
+    tags=["Résultats"],
+)
+def get_job_results(
+    job_id: str,
+) -> JobResultManifest:
+    """Retourne le manifeste scientifique des résultats."""
+    try:
+        job = read_job(job_id)
+    except FileNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+
+    manifest = build_result_manifest(
+        job_id,
+        Path(job["working_dir"]),
+    )
+
+    return JobResultManifest(**manifest)
 
 
 @app.get(
