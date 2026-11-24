@@ -98,3 +98,100 @@ def test_preview_resolves_table_from_manifest(tmp_path: Path) -> None:
     assert preview["result_id"] == "identified-features"
     assert preview["returned"] == 5
     assert preview["rows"][0]["feature_id"] == 10
+
+
+def test_parquet_preview_sorts_globally_descending(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "table.parquet"
+    create_parquet(path)
+
+    preview = preview_parquet(
+        path,
+        offset=0,
+        limit=5,
+        columns=["feature_id", "mz"],
+        sort_by="mz",
+        sort_direction="desc",
+    )
+
+    assert [
+        row["feature_id"]
+        for row in preview["rows"]
+    ] == [249, 248, 247, 246, 245]
+
+    assert preview["sort_by"] == "mz"
+    assert preview["sort_direction"] == "desc"
+
+
+def test_parquet_preview_sort_is_preserved_across_pages(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "table.parquet"
+    create_parquet(path)
+
+    first_page = preview_parquet(
+        path,
+        offset=0,
+        limit=5,
+        columns=["feature_id"],
+        sort_by="feature_id",
+        sort_direction="asc",
+    )
+
+    second_page = preview_parquet(
+        path,
+        offset=5,
+        limit=5,
+        columns=["feature_id"],
+        sort_by="feature_id",
+        sort_direction="asc",
+    )
+
+    assert [
+        row["feature_id"]
+        for row in first_page["rows"]
+    ] == [0, 1, 2, 3, 4]
+
+    assert [
+        row["feature_id"]
+        for row in second_page["rows"]
+    ] == [5, 6, 7, 8, 9]
+
+
+def test_parquet_preview_rejects_unknown_sort_column(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "table.parquet"
+    create_parquet(path)
+
+    with pytest.raises(
+        ValueError,
+        match="Colonne de tri inconnue",
+    ):
+        preview_parquet(
+            path,
+            offset=0,
+            limit=10,
+            sort_by="unknown",
+            sort_direction="asc",
+        )
+
+
+def test_parquet_preview_rejects_invalid_sort_direction(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "table.parquet"
+    create_parquet(path)
+
+    with pytest.raises(
+        ValueError,
+        match="direction de tri",
+    ):
+        preview_parquet(
+            path,
+            offset=0,
+            limit=10,
+            sort_by="mz",
+            sort_direction="sideways",
+        )

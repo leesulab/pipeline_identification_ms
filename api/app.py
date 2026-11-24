@@ -27,6 +27,10 @@ from api.pipeline_presets import (
 from api.result_manifest import (
     build_result_manifest,
 )
+from api.table_preview import (
+    DEFAULT_LIMIT,
+    preview_table,
+)
 
 from api.pipeline_validation import (
     validate_pipeline_configuration,
@@ -133,6 +137,29 @@ class JobResultEntry(BaseModel):
     relative_path: str
     size_bytes: int
     order: int
+
+
+class TablePreviewColumn(BaseModel):
+    """Colonne exposée dans l’aperçu tabulaire."""
+
+    name: str
+    type: str
+
+
+class TablePreviewResponse(BaseModel):
+    """Page de prévisualisation CSV ou Parquet."""
+
+    result_id: str
+    format: str
+    columns: List[TablePreviewColumn]
+    rows: List[Dict[str, Any]]
+    offset: int
+    limit: int
+    returned: int
+    total: int
+    has_more: bool
+    sort_by: Optional[str] = None
+    sort_direction: Optional[str] = None
 
 
 class JobResultManifest(BaseModel):
@@ -617,6 +644,58 @@ def classify_job_file(relative_path: Path) -> str:
         return "state"
 
     return "metadata"
+
+
+@app.get(
+    "/api/v1/jobs/{job_id}/tables/{result_id}/preview",
+    response_model=TablePreviewResponse,
+    tags=["Résultats"],
+)
+def preview_job_table(
+    job_id: str,
+    result_id: str,
+    offset: int = 0,
+    limit: int = DEFAULT_LIMIT,
+    columns: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_direction: Optional[str] = None,
+) -> TablePreviewResponse:
+    """Retourne une page d’une table scientifique."""
+    try:
+        job = read_job(job_id)
+
+        selected_columns = (
+            [
+                value.strip()
+                for value in columns.split(",")
+                if value.strip()
+            ]
+            if columns
+            else None
+        )
+
+        preview = preview_table(
+            job_id=job_id,
+            job_dir=Path(job["working_dir"]),
+            result_id=result_id,
+            offset=offset,
+            limit=limit,
+            columns=selected_columns,
+            sort_by=sort_by,
+            sort_direction=sort_direction,
+        )
+    except FileNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(error),
+        ) from error
+
+    return TablePreviewResponse(**preview)
 
 
 @app.get(

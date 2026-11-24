@@ -14,3 +14,4 @@ tqdm==4.70.1
 
 # Version de DEIMoS utilisée historiquement par le projet
 deimos @ git+https://github.com/pnnl/deimos.git@d2fd7d704eed15484a73d294501a60707525d284
+duckdb==1.4.5

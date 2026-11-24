@@ -4,6 +4,7 @@ import csv
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
 
@@ -56,6 +57,48 @@ def _select_columns(
     return requested
 
 
+def _quote_identifier(name: str) -> str:
+    """Protège un nom de colonne validé pour DuckDB."""
+    return '"' + name.replace('"', '""') + '"'
+
+
+def _validate_sort(
+    available_columns: Iterable[str],
+    sort_by: Optional[str],
+    sort_direction: Optional[str],
+) -> Optional[str]:
+    """Valide et construit la clause ORDER BY."""
+    if sort_by is None:
+        if sort_direction is not None:
+            raise ValueError(
+                "sort_direction nécessite sort_by."
+            )
+
+        return None
+
+    available = list(available_columns)
+
+    if sort_by not in available:
+        raise ValueError(
+            f"Colonne de tri inconnue : {sort_by}."
+        )
+
+    direction = (
+        sort_direction or "asc"
+    ).lower()
+
+    if direction not in {"asc", "desc"}:
+        raise ValueError(
+            "La direction de tri doit être "
+            "'asc' ou 'desc'."
+        )
+
+    return (
+        f"{_quote_identifier(sort_by)} "
+        f"{direction.upper()} NULLS LAST"
+    )
+
+
 def resolve_table_result(
     job_id: str,
     job_dir: Path,
@@ -88,6 +131,8 @@ def preview_parquet(
     offset: int,
     limit: int,
     columns: Optional[List[str]] = None,
+    sort_by: Optional[str] = None,
+    sort_direction: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Lit uniquement les groupes de lignes couvrant la page."""
     _validate_pagination(offset, limit)
@@ -100,6 +145,74 @@ def preview_parquet(
         for field in parquet.schema_arrow
         if field.name in selected_columns
     }
+
+    order_clause = _validate_sort(
+        parquet.schema_arrow.names,
+        sort_by,
+        sort_direction,
+    )
+
+    if order_clause is not None:
+        selected_sql = ", ".join(
+            _quote_identifier(name)
+            for name in selected_columns
+        )
+
+        query = f"""
+            SELECT {selected_sql}
+            FROM read_parquet(?)
+            ORDER BY {order_clause}
+            LIMIT ?
+            OFFSET ?
+        """
+
+        connection = duckdb.connect()
+
+        try:
+            raw_rows = connection.execute(
+                query,
+                [
+                    str(path),
+                    limit,
+                    offset,
+                ],
+            ).fetchall()
+        finally:
+            connection.close()
+
+        rows = [
+            {
+                name: _serialize_cell(value)
+                for name, value in zip(
+                    selected_columns,
+                    row,
+                )
+            }
+            for row in raw_rows
+        ]
+
+        returned = len(rows)
+
+        return {
+            "format": "parquet",
+            "columns": [
+                {
+                    "name": name,
+                    "type": column_types[name],
+                }
+                for name in selected_columns
+            ],
+            "rows": rows,
+            "offset": offset,
+            "limit": limit,
+            "returned": returned,
+            "total": total,
+            "has_more": offset + returned < total,
+            "sort_by": sort_by,
+            "sort_direction": (
+                sort_direction or "asc"
+            ).lower(),
+        }
 
     if offset >= total:
         rows: List[Dict[str, Any]] = []
@@ -196,11 +309,20 @@ def preview_table(
     offset: int = 0,
     limit: int = DEFAULT_LIMIT,
     columns: Optional[List[str]] = None,
+    sort_by: Optional[str] = None,
+    sort_direction: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Prévisualise une table déclarée dans le manifeste."""
     path = resolve_table_result(job_id, job_dir, result_id)
     if path.suffix.lower() == ".parquet":
-        preview = preview_parquet(path, offset, limit, columns)
+        preview = preview_parquet(
+            path,
+            offset,
+            limit,
+            columns,
+            sort_by,
+            sort_direction,
+        )
     elif path.suffix.lower() == ".csv":
         preview = preview_csv(path, offset, limit, columns)
     else:

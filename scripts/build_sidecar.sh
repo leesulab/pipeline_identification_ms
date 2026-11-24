@@ -40,6 +40,7 @@ cd "${PROJECT_DIR}"
   --distpath "${OUTPUT_DIR}" \
   --specpath "${PROJECT_DIR}" \
   --paths "${PROJECT_DIR}" \
+  --collect-all duckdb \
   --hidden-import api.app \
   --hidden-import api.jobs \
   --hidden-import uvicorn.logging \
