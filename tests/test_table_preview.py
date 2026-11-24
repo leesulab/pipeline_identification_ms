@@ -195,3 +195,200 @@ def test_parquet_preview_rejects_invalid_sort_direction(
             sort_by="mz",
             sort_direction="sideways",
         )
+
+
+def test_parquet_preview_combines_numeric_filters(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "table.parquet"
+    create_parquet(path)
+
+    preview = preview_parquet(
+        path,
+        offset=0,
+        limit=50,
+        columns=["feature_id", "mz"],
+        sort_by="feature_id",
+        sort_direction="asc",
+        filters=[
+            {
+                "column": "feature_id",
+                "operator": "gte",
+                "value": 100,
+            },
+            {
+                "column": "feature_id",
+                "operator": "lt",
+                "value": 110,
+            },
+        ],
+    )
+
+    assert preview["total"] == 10
+    assert preview["returned"] == 10
+
+    assert [
+        row["feature_id"]
+        for row in preview["rows"]
+    ] == list(range(100, 110))
+
+
+def test_parquet_preview_filters_text_case_insensitively(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "table.parquet"
+    create_parquet(path)
+
+    preview = preview_parquet(
+        path,
+        offset=0,
+        limit=20,
+        columns=["feature_id", "sample"],
+        filters=[
+            {
+                "column": "sample",
+                "operator": "contains",
+                "value": "SAMPLE_2",
+            },
+        ],
+    )
+
+    assert preview["total"] == 50
+
+    assert all(
+        row["sample"] == "sample_2"
+        for row in preview["rows"]
+    )
+
+
+def test_parquet_preview_filters_null_values(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "nullable.parquet"
+
+    pq.write_table(
+        pa.table(
+            {
+                "id": [1, 2, 3, 4],
+                "score": [
+                    0.5,
+                    None,
+                    0.8,
+                    None,
+                ],
+            }
+        ),
+        path,
+    )
+
+    preview = preview_parquet(
+        path,
+        offset=0,
+        limit=10,
+        columns=["id", "score"],
+        filters=[
+            {
+                "column": "score",
+                "operator": "is_null",
+            },
+        ],
+    )
+
+    assert preview["total"] == 2
+
+    assert [
+        row["id"]
+        for row in preview["rows"]
+    ] == [2, 4]
+
+
+def test_parquet_preview_filters_non_null_values(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "nullable.parquet"
+
+    pq.write_table(
+        pa.table(
+            {
+                "id": [1, 2, 3, 4],
+                "score": [
+                    0.5,
+                    None,
+                    0.8,
+                    None,
+                ],
+            }
+        ),
+        path,
+    )
+
+    preview = preview_parquet(
+        path,
+        offset=0,
+        limit=10,
+        columns=["id", "score"],
+        sort_by="score",
+        sort_direction="desc",
+        filters=[
+            {
+                "column": "score",
+                "operator": "not_null",
+            },
+        ],
+    )
+
+    assert preview["total"] == 2
+    assert preview["returned"] == 2
+
+    assert [
+        row["id"]
+        for row in preview["rows"]
+    ] == [3, 1]
+
+
+def test_parquet_preview_rejects_unknown_filter_column(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "table.parquet"
+    create_parquet(path)
+
+    with pytest.raises(
+        ValueError,
+        match="Colonne de filtre inconnue",
+    ):
+        preview_parquet(
+            path,
+            offset=0,
+            limit=10,
+            filters=[
+                {
+                    "column": "unknown",
+                    "operator": "eq",
+                    "value": 1,
+                },
+            ],
+        )
+
+
+def test_parquet_preview_rejects_unknown_operator(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "table.parquet"
+    create_parquet(path)
+
+    with pytest.raises(
+        ValueError,
+        match="Opérateur de filtre inconnu",
+    ):
+        preview_parquet(
+            path,
+            offset=0,
+            limit=10,
+            filters=[
+                {
+                    "column": "mz",
+                    "operator": "approximately",
+                    "value": 120,
+                },
+            ],
+        )

@@ -99,6 +99,123 @@ def _validate_sort(
     )
 
 
+FILTER_OPERATORS = {
+    "eq",
+    "ne",
+    "lt",
+    "lte",
+    "gt",
+    "gte",
+    "contains",
+    "starts_with",
+    "is_null",
+    "not_null",
+}
+
+
+def _build_filter_clause(
+    available_columns: Iterable[str],
+    filters: Optional[List[Dict[str, Any]]],
+) -> tuple[str, List[Any]]:
+    """Construit une clause WHERE DuckDB paramétrée."""
+    if not filters:
+        return "", []
+
+    available = set(available_columns)
+    conditions: List[str] = []
+    parameters: List[Any] = []
+
+    comparison_operators = {
+        "eq": "=",
+        "ne": "<>",
+        "lt": "<",
+        "lte": "<=",
+        "gt": ">",
+        "gte": ">=",
+    }
+
+    for index, filter_item in enumerate(filters):
+        filter_number = index + 1
+
+        if not isinstance(filter_item, dict):
+            raise ValueError(
+                f"Filtre {filter_number} invalide."
+            )
+
+        column = filter_item.get("column")
+        operator = filter_item.get("operator")
+        value = filter_item.get("value")
+
+        if not isinstance(column, str):
+            raise ValueError(
+                f"Filtre {filter_number} : colonne invalide."
+            )
+
+        if column not in available:
+            raise ValueError(
+                f"Colonne de filtre inconnue : {column}."
+            )
+
+        if operator not in FILTER_OPERATORS:
+            raise ValueError(
+                f"Opérateur de filtre inconnu : {operator}."
+            )
+
+        quoted_column = _quote_identifier(column)
+
+        if operator in comparison_operators:
+            if value is None:
+                raise ValueError(
+                    f"Le filtre {column} nécessite une valeur."
+                )
+
+            conditions.append(
+                f"{quoted_column} "
+                f"{comparison_operators[operator]} ?"
+            )
+            parameters.append(value)
+            continue
+
+        if operator in {
+            "contains",
+            "starts_with",
+        }:
+            if not isinstance(value, str):
+                raise ValueError(
+                    f"Le filtre texte {column} "
+                    "nécessite une chaîne."
+                )
+
+            pattern = (
+                f"%{value}%"
+                if operator == "contains"
+                else f"{value}%"
+            )
+
+            conditions.append(
+                f"CAST({quoted_column} AS VARCHAR) "
+                "ILIKE ?"
+            )
+            parameters.append(pattern)
+            continue
+
+        if operator == "is_null":
+            conditions.append(
+                f"{quoted_column} IS NULL"
+            )
+            continue
+
+        if operator == "not_null":
+            conditions.append(
+                f"{quoted_column} IS NOT NULL"
+            )
+
+    return (
+        " WHERE " + " AND ".join(conditions),
+        parameters,
+    )
+
+
 def resolve_table_result(
     job_id: str,
     job_dir: Path,
@@ -133,6 +250,9 @@ def preview_parquet(
     columns: Optional[List[str]] = None,
     sort_by: Optional[str] = None,
     sort_direction: Optional[str] = None,
+    filters: Optional[
+        List[Dict[str, Any]]
+    ] = None,
 ) -> Dict[str, Any]:
     """Lit uniquement les groupes de lignes couvrant la page."""
     _validate_pagination(offset, limit)
@@ -152,27 +272,56 @@ def preview_parquet(
         sort_direction,
     )
 
-    if order_clause is not None:
+    where_clause, filter_parameters = (
+        _build_filter_clause(
+            parquet.schema_arrow.names,
+            filters,
+        )
+    )
+
+    if order_clause is not None or filters:
         selected_sql = ", ".join(
             _quote_identifier(name)
             for name in selected_columns
         )
 
-        query = f"""
+        order_sql = (
+            f" ORDER BY {order_clause}"
+            if order_clause is not None
+            else ""
+        )
+
+        page_query = f"""
             SELECT {selected_sql}
             FROM read_parquet(?)
-            ORDER BY {order_clause}
+            {where_clause}
+            {order_sql}
             LIMIT ?
             OFFSET ?
+        """
+
+        count_query = f"""
+            SELECT COUNT(*)
+            FROM read_parquet(?)
+            {where_clause}
         """
 
         connection = duckdb.connect()
 
         try:
-            raw_rows = connection.execute(
-                query,
+            total = connection.execute(
+                count_query,
                 [
                     str(path),
+                    *filter_parameters,
+                ],
+            ).fetchone()[0]
+
+            raw_rows = connection.execute(
+                page_query,
+                [
+                    str(path),
+                    *filter_parameters,
                     limit,
                     offset,
                 ],
@@ -210,8 +359,11 @@ def preview_parquet(
             "has_more": offset + returned < total,
             "sort_by": sort_by,
             "sort_direction": (
-                sort_direction or "asc"
-            ).lower(),
+                (sort_direction or "asc").lower()
+                if sort_by is not None
+                else None
+            ),
+            "filters": filters or [],
         }
 
     if offset >= total:
@@ -311,6 +463,9 @@ def preview_table(
     columns: Optional[List[str]] = None,
     sort_by: Optional[str] = None,
     sort_direction: Optional[str] = None,
+    filters: Optional[
+        List[Dict[str, Any]]
+    ] = None,
 ) -> Dict[str, Any]:
     """Prévisualise une table déclarée dans le manifeste."""
     path = resolve_table_result(job_id, job_dir, result_id)
@@ -322,6 +477,7 @@ def preview_table(
             columns,
             sort_by,
             sort_direction,
+            filters,
         )
     elif path.suffix.lower() == ".csv":
         preview = preview_csv(path, offset, limit, columns)

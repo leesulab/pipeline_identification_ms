@@ -1,5 +1,6 @@
 """Application FastAPI exposant la pipeline d'identification MS."""
 
+import json
 import os
 import secrets
 from pathlib import Path
@@ -160,6 +161,9 @@ class TablePreviewResponse(BaseModel):
     has_more: bool
     sort_by: Optional[str] = None
     sort_direction: Optional[str] = None
+    filters: List[Dict[str, Any]] = Field(
+        default_factory=list
+    )
 
 
 class JobResultManifest(BaseModel):
@@ -659,6 +663,7 @@ def preview_job_table(
     columns: Optional[str] = None,
     sort_by: Optional[str] = None,
     sort_direction: Optional[str] = None,
+    filters: Optional[str] = None,
 ) -> TablePreviewResponse:
     """Retourne une page d’une table scientifique."""
     try:
@@ -674,6 +679,30 @@ def preview_job_table(
             else None
         )
 
+        selected_filters = None
+
+        if filters:
+            try:
+                decoded_filters = json.loads(filters)
+            except json.JSONDecodeError as error:
+                raise ValueError(
+                    "Le paramètre filters doit être "
+                    "un tableau JSON valide."
+                ) from error
+
+            if not isinstance(decoded_filters, list):
+                raise ValueError(
+                    "Le paramètre filters doit contenir "
+                    "un tableau JSON."
+                )
+
+            if len(decoded_filters) > 20:
+                raise ValueError(
+                    "Un maximum de 20 filtres est autorisé."
+                )
+
+            selected_filters = decoded_filters
+
         preview = preview_table(
             job_id=job_id,
             job_dir=Path(job["working_dir"]),
@@ -683,6 +712,7 @@ def preview_job_table(
             columns=selected_columns,
             sort_by=sort_by,
             sort_direction=sort_direction,
+            filters=selected_filters,
         )
     except FileNotFoundError as error:
         raise HTTPException(

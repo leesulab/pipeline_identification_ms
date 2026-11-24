@@ -1,5 +1,6 @@
 """Tests HTTP de prévisualisation tabulaire."""
 
+import json
 from pathlib import Path
 
 import pyarrow as pa
@@ -236,3 +237,105 @@ def test_table_preview_rejects_invalid_sort(
     )
 
     assert response.status_code == 422
+
+
+def test_table_preview_combines_http_filters(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    job = create_table_job(
+        tmp_path,
+        monkeypatch,
+    )
+
+    filters = [
+        {
+            "column": "feature_id",
+            "operator": "gte",
+            "value": 20,
+        },
+        {
+            "column": "feature_id",
+            "operator": "lt",
+            "value": 25,
+        },
+    ]
+
+    response = client.get(
+        f"/api/v1/jobs/{job['job_id']}"
+        "/tables/identified-features/preview",
+        params={
+            "columns": "feature_id,mz",
+            "sort_by": "feature_id",
+            "sort_direction": "desc",
+            "filters": json.dumps(filters),
+        },
+    )
+
+    assert response.status_code == 200
+
+    preview = response.json()
+
+    assert preview["total"] == 5
+    assert preview["filters"] == filters
+
+    assert [
+        row["feature_id"]
+        for row in preview["rows"]
+    ] == [24, 23, 22, 21, 20]
+
+
+def test_table_preview_rejects_invalid_filter_json(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    job = create_table_job(
+        tmp_path,
+        monkeypatch,
+    )
+
+    response = client.get(
+        f"/api/v1/jobs/{job['job_id']}"
+        "/tables/identified-features/preview",
+        params={
+            "filters": "{invalid-json",
+        },
+    )
+
+    assert response.status_code == 422
+
+    assert "tableau JSON valide" in (
+        response.json()["detail"]
+    )
+
+
+def test_table_preview_rejects_too_many_filters(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    job = create_table_job(
+        tmp_path,
+        monkeypatch,
+    )
+
+    filters = [
+        {
+            "column": "feature_id",
+            "operator": "gte",
+            "value": index,
+        }
+        for index in range(21)
+    ]
+
+    response = client.get(
+        f"/api/v1/jobs/{job['job_id']}"
+        "/tables/identified-features/preview",
+        params={
+            "filters": json.dumps(filters),
+        },
+    )
+
+    assert response.status_code == 422
+    assert "maximum de 20 filtres" in (
+        response.json()["detail"]
+    )
