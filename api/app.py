@@ -28,6 +28,9 @@ from api.pipeline_presets import (
 from api.result_manifest import (
     build_result_manifest,
 )
+from api.result_summary import (
+    summarize_identified_features,
+)
 from api.table_preview import (
     DEFAULT_LIMIT,
     preview_table,
@@ -164,6 +167,31 @@ class TablePreviewResponse(BaseModel):
     filters: List[Dict[str, Any]] = Field(
         default_factory=list
     )
+
+
+class ConfidenceDistributionEntry(BaseModel):
+    """Répartition des résultats par niveau de confiance."""
+
+    confidence_level: int
+    row_count: int
+    feature_count: int
+
+
+class IdentificationSummaryResponse(BaseModel):
+    """Synthèse scientifique des features identifiées."""
+
+    row_count: int
+    unique_feature_count: int
+    identified_row_count: int
+    identification_rate: float
+    identified_feature_count: int
+    feature_identification_rate: float
+    distinct_molecule_count: int
+    median_global_score: Optional[float]
+    sample_count: int
+    confidence_distribution: List[
+        ConfidenceDistributionEntry
+    ]
 
 
 class JobResultManifest(BaseModel):
@@ -726,6 +754,52 @@ def preview_job_table(
         ) from error
 
     return TablePreviewResponse(**preview)
+
+
+@app.get(
+    "/api/v1/jobs/{job_id}/results/summary",
+    response_model=IdentificationSummaryResponse,
+    tags=["Résultats"],
+)
+def get_job_result_summary(
+    job_id: str,
+) -> IdentificationSummaryResponse:
+    """Retourne la synthèse scientifique d’un job."""
+    try:
+        job = read_job(job_id)
+    except FileNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+
+    features_file = (
+        Path(job["working_dir"])
+        / "data"
+        / "output"
+        / "feature_matrix"
+        / "features_complete.parquet"
+    )
+
+    try:
+        summary = summarize_identified_features(
+            features_file
+        )
+    except FileNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Impossible de calculer la synthèse "
+                f"scientifique : {error}"
+            ),
+        ) from error
+
+    return IdentificationSummaryResponse(**summary)
 
 
 @app.get(
