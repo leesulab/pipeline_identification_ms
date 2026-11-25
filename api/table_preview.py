@@ -110,6 +110,8 @@ FILTER_OPERATORS = {
     "starts_with",
     "is_null",
     "not_null",
+    "is_empty",
+    "not_empty",
 }
 
 
@@ -208,6 +210,26 @@ def _build_filter_clause(
         if operator == "not_null":
             conditions.append(
                 f"{quoted_column} IS NOT NULL"
+            )
+            continue
+
+        if operator == "is_empty":
+            conditions.append(
+                "("
+                f"{quoted_column} IS NULL "
+                "OR "
+                f"TRIM(CAST({quoted_column} AS VARCHAR)) = ''"
+                ")"
+            )
+            continue
+
+        if operator == "not_empty":
+            conditions.append(
+                "("
+                f"{quoted_column} IS NOT NULL "
+                "AND "
+                f"TRIM(CAST({quoted_column} AS VARCHAR)) <> ''"
+                ")"
             )
 
     return (

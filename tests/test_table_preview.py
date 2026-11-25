@@ -392,3 +392,91 @@ def test_parquet_preview_rejects_unknown_operator(
                 },
             ],
         )
+
+
+def test_parquet_preview_filters_empty_strings_and_nulls(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "empty-values.parquet"
+
+    pq.write_table(
+        pa.table(
+            {
+                "id": [1, 2, 3, 4, 5],
+                "match_name": [
+                    "Molecule A",
+                    None,
+                    "",
+                    "   ",
+                    "Molecule B",
+                ],
+            }
+        ),
+        path,
+    )
+
+    preview = preview_parquet(
+        path,
+        offset=0,
+        limit=10,
+        columns=["id", "match_name"],
+        sort_by="id",
+        sort_direction="asc",
+        filters=[
+            {
+                "column": "match_name",
+                "operator": "is_empty",
+            },
+        ],
+    )
+
+    assert preview["total"] == 3
+
+    assert [
+        row["id"]
+        for row in preview["rows"]
+    ] == [2, 3, 4]
+
+
+def test_parquet_preview_filters_non_empty_strings(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "empty-values.parquet"
+
+    pq.write_table(
+        pa.table(
+            {
+                "id": [1, 2, 3, 4, 5],
+                "match_name": [
+                    "Molecule A",
+                    None,
+                    "",
+                    "   ",
+                    "Molecule B",
+                ],
+            }
+        ),
+        path,
+    )
+
+    preview = preview_parquet(
+        path,
+        offset=0,
+        limit=10,
+        columns=["id", "match_name"],
+        sort_by="id",
+        sort_direction="asc",
+        filters=[
+            {
+                "column": "match_name",
+                "operator": "not_empty",
+            },
+        ],
+    )
+
+    assert preview["total"] == 2
+
+    assert [
+        row["id"]
+        for row in preview["rows"]
+    ] == [1, 5]
