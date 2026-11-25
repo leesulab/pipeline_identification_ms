@@ -95,6 +95,41 @@ def test_identification_summary(
     assert summary["median_global_score"] == 0.75
     assert summary["sample_count"] == 3
 
+    statistics = {
+        item["sample_name"]: item
+        for item in summary["sample_statistics"]
+    }
+
+    assert set(statistics) == {
+        "sample_a",
+        "sample_b",
+        "sample_c",
+    }
+
+    assert statistics["sample_a"][
+        "unique_feature_count"
+    ] == 2
+
+    assert statistics["sample_a"][
+        "identified_feature_count"
+    ] == 2
+
+    assert statistics["sample_a"][
+        "feature_identification_rate"
+    ] == 1.0
+
+    assert statistics["sample_c"][
+        "unique_feature_count"
+    ] == 2
+
+    assert statistics["sample_c"][
+        "identified_feature_count"
+    ] == 0
+
+    assert statistics["sample_c"][
+        "feature_identification_rate"
+    ] == 0.0
+
     assert summary["confidence_distribution"] == [
         {
             "confidence_level": 1,

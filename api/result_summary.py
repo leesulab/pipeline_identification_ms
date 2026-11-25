@@ -79,6 +79,44 @@ def summarize_identified_features(
             [str(parquet_path)],
         ).fetchall()
 
+        sample_statistics_rows = connection.execute(
+            """
+            WITH expanded_samples AS (
+                SELECT
+                    feature_idx,
+                    match_name,
+                    global_score,
+                    TRIM(sample_name) AS sample_name
+                FROM read_parquet(?),
+                UNNEST(
+                    STRING_SPLIT(samples, ',')
+                ) AS expanded(sample_name)
+                WHERE samples IS NOT NULL
+                  AND TRIM(samples) <> ''
+                  AND TRIM(sample_name) <> ''
+            )
+            SELECT
+                sample_name,
+                COUNT(DISTINCT feature_idx)
+                    AS unique_feature_count,
+                COUNT(DISTINCT feature_idx) FILTER (
+                    WHERE match_name IS NOT NULL
+                      AND TRIM(match_name) <> ''
+                ) AS identified_feature_count,
+                COUNT(*) FILTER (
+                    WHERE match_name IS NOT NULL
+                      AND TRIM(match_name) <> ''
+                ) AS identified_row_count,
+                MEDIAN(global_score) FILTER (
+                    WHERE global_score IS NOT NULL
+                ) AS median_global_score
+            FROM expanded_samples
+            GROUP BY sample_name
+            ORDER BY sample_name
+            """,
+            [str(parquet_path)],
+        ).fetchall()
+
         sample_rows = connection.execute(
             """
             SELECT DISTINCT
@@ -132,6 +170,52 @@ def summarize_identified_features(
         else 0.0
     )
 
+    sample_statistics = []
+
+    for (
+        sample_name,
+        sample_feature_count,
+        sample_identified_feature_count,
+        sample_identified_row_count,
+        sample_median_global_score,
+    ) in sample_statistics_rows:
+        sample_feature_count = _safe_integer(
+            sample_feature_count
+        )
+
+        sample_identified_feature_count = (
+            _safe_integer(
+                sample_identified_feature_count
+            )
+        )
+
+        sample_feature_identification_rate = (
+            sample_identified_feature_count
+            / sample_feature_count
+            if sample_feature_count > 0
+            else 0.0
+        )
+
+        sample_statistics.append(
+            {
+                "sample_name": str(sample_name),
+                "unique_feature_count":
+                    sample_feature_count,
+                "identified_feature_count":
+                    sample_identified_feature_count,
+                "feature_identification_rate":
+                    sample_feature_identification_rate,
+                "identified_row_count":
+                    _safe_integer(
+                        sample_identified_row_count
+                    ),
+                "median_global_score":
+                    _safe_float(
+                        sample_median_global_score
+                    ),
+            }
+        )
+
     confidence_distribution = [
         {
             "confidence_level": int(level),
@@ -163,6 +247,7 @@ def summarize_identified_features(
             median_global_score
         ),
         "sample_count": len(sample_rows),
+        "sample_statistics": sample_statistics,
         "confidence_distribution":
             confidence_distribution,
     }

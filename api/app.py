@@ -177,6 +177,17 @@ class ConfidenceDistributionEntry(BaseModel):
     feature_count: int
 
 
+class SampleIdentificationStatistics(BaseModel):
+    """Indicateurs d’identification pour un échantillon."""
+
+    sample_name: str
+    unique_feature_count: int
+    identified_feature_count: int
+    feature_identification_rate: float
+    identified_row_count: int
+    median_global_score: Optional[float]
+
+
 class IdentificationSummaryResponse(BaseModel):
     """Synthèse scientifique des features identifiées."""
 
@@ -189,6 +200,9 @@ class IdentificationSummaryResponse(BaseModel):
     distinct_molecule_count: int
     median_global_score: Optional[float]
     sample_count: int
+    sample_statistics: List[
+        SampleIdentificationStatistics
+    ]
     confidence_distribution: List[
         ConfidenceDistributionEntry
     ]

@@ -113,6 +113,49 @@ def test_result_summary_endpoint(
     assert summary["median_global_score"] == 0.8
     assert summary["sample_count"] == 3
 
+    sample_statistics = {
+        item["sample_name"]: item
+        for item in summary["sample_statistics"]
+    }
+
+    assert set(sample_statistics) == {
+        "sample_a",
+        "sample_b",
+        "sample_c",
+    }
+
+    assert sample_statistics["sample_a"][
+        "unique_feature_count"
+    ] == 1
+
+    assert sample_statistics["sample_a"][
+        "identified_feature_count"
+    ] == 1
+
+    assert sample_statistics["sample_a"][
+        "identified_row_count"
+    ] == 2
+
+    assert sample_statistics["sample_a"][
+        "feature_identification_rate"
+    ] == 1.0
+
+    assert sample_statistics["sample_b"][
+        "unique_feature_count"
+    ] == 2
+
+    assert sample_statistics["sample_b"][
+        "identified_feature_count"
+    ] == 2
+
+    assert sample_statistics["sample_c"][
+        "unique_feature_count"
+    ] == 2
+
+    assert sample_statistics["sample_c"][
+        "identified_feature_count"
+    ] == 0
+
     assert summary["confidence_distribution"] == [
         {
             "confidence_level": 1,
