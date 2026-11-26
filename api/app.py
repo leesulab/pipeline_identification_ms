@@ -18,7 +18,11 @@ from fastapi import (
 )
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import (
+    FileResponse,
+    JSONResponse,
+    StreamingResponse,
+)
 
 from api.pipeline_schema import build_pipeline_schema
 from api.pipeline_presets import (
@@ -34,6 +38,8 @@ from api.result_summary import (
 from api.table_preview import (
     DEFAULT_LIMIT,
     preview_table,
+    resolve_table_result,
+    stream_parquet_csv,
 )
 
 from api.pipeline_validation import (
@@ -690,6 +696,125 @@ def classify_job_file(relative_path: Path) -> str:
         return "state"
 
     return "metadata"
+
+
+@app.get(
+    "/api/v1/jobs/{job_id}/tables/{result_id}/export.csv",
+    response_class=StreamingResponse,
+    tags=["Résultats"],
+)
+def export_job_table_csv(
+    job_id: str,
+    result_id: str,
+    columns: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_direction: Optional[str] = None,
+    filters: Optional[str] = None,
+    filename: Optional[str] = None,
+) -> StreamingResponse:
+    """Exporte une vue filtrée et triée au format CSV."""
+    try:
+        job = read_job(job_id)
+
+        selected_columns = (
+            [
+                value.strip()
+                for value in columns.split(",")
+                if value.strip()
+            ]
+            if columns
+            else None
+        )
+
+        selected_filters = None
+
+        if filters:
+            try:
+                decoded_filters = json.loads(filters)
+            except json.JSONDecodeError as error:
+                raise ValueError(
+                    "Le paramètre filters doit être "
+                    "un tableau JSON valide."
+                ) from error
+
+            if not isinstance(decoded_filters, list):
+                raise ValueError(
+                    "Le paramètre filters doit contenir "
+                    "un tableau JSON."
+                )
+
+            if len(decoded_filters) > 20:
+                raise ValueError(
+                    "Un maximum de 20 filtres est autorisé."
+                )
+
+            selected_filters = decoded_filters
+
+        job_dir = Path(job["working_dir"])
+
+        table_path = resolve_table_result(
+            job_id=job_id,
+            job_dir=job_dir,
+            result_id=result_id,
+        )
+
+        if table_path.suffix.lower() != ".parquet":
+            raise ValueError(
+                "L’export de vue filtrée est actuellement "
+                "réservé aux tables Parquet."
+            )
+
+        stream = stream_parquet_csv(
+            path=table_path,
+            columns=selected_columns,
+            sort_by=sort_by,
+            sort_direction=sort_direction,
+            filters=selected_filters,
+        )
+
+        requested_filename = (
+            filename.strip()
+            if filename
+            else f"{result_id}-filtered.csv"
+        )
+
+        safe_filename = "".join(
+            character
+            if character.isalnum()
+            or character in {"-", "_", "."}
+            else "-"
+            for character in requested_filename
+        ).strip(".-")
+
+        if not safe_filename:
+            safe_filename = (
+                f"{result_id}-filtered.csv"
+            )
+
+        if not safe_filename.lower().endswith(".csv"):
+            safe_filename += ".csv"
+
+        return StreamingResponse(
+            stream,
+            media_type="text/csv; charset=utf-8",
+            headers={
+                "Content-Disposition": (
+                    'attachment; filename="'
+                    f'{safe_filename}"'
+                ),
+            },
+        )
+
+    except FileNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(error),
+        ) from error
 
 
 @app.get(

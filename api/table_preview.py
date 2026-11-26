@@ -1,6 +1,7 @@
 """Prévisualisation paginée des résultats CSV et Parquet."""
 
 import csv
+import io
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -474,6 +475,173 @@ def preview_csv(
         "total": total,
         "has_more": offset + len(rows) < total,
     }
+
+
+MAX_EXPORT_ROWS = 1_000_000
+EXPORT_BATCH_SIZE = 1_000
+
+
+def _export_cell(value: Any) -> Any:
+    """Convertit une valeur DuckDB pour l’écriture CSV."""
+    if value is None:
+        return ""
+
+    if isinstance(value, bytes):
+        return value.hex()
+
+    if isinstance(value, (list, tuple, dict)):
+        return str(value)
+
+    return value
+
+
+def stream_parquet_csv(
+    path: Path,
+    columns: Optional[List[str]] = None,
+    sort_by: Optional[str] = None,
+    sort_direction: Optional[str] = None,
+    filters: Optional[
+        List[Dict[str, Any]]
+    ] = None,
+    max_rows: int = MAX_EXPORT_ROWS,
+    batch_size: int = EXPORT_BATCH_SIZE,
+) -> Iterable[str]:
+    """
+    Exporte une vue Parquet en CSV par lots.
+
+    La connexion DuckDB reste ouverte pendant l’itération,
+    puis est toujours fermée, y compris si le téléchargement
+    est interrompu.
+    """
+    if batch_size < 1:
+        raise ValueError(
+            "La taille des lots doit être supérieure à 0."
+        )
+
+    if max_rows < 0:
+        raise ValueError(
+            "La limite d’export doit être positive."
+        )
+
+    parquet = pq.ParquetFile(path)
+
+    selected_columns = _select_columns(
+        parquet.schema_arrow.names,
+        columns,
+    )
+
+    if not selected_columns:
+        raise ValueError(
+            "Au moins une colonne doit être exportée."
+        )
+
+    order_clause = _validate_sort(
+        parquet.schema_arrow.names,
+        sort_by,
+        sort_direction,
+    )
+
+    where_clause, filter_parameters = (
+        _build_filter_clause(
+            parquet.schema_arrow.names,
+            filters,
+        )
+    )
+
+    selected_sql = ", ".join(
+        _quote_identifier(name)
+        for name in selected_columns
+    )
+
+    order_sql = (
+        f" ORDER BY {order_clause}"
+        if order_clause is not None
+        else ""
+    )
+
+    count_query = f"""
+        SELECT COUNT(*)
+        FROM read_parquet(?)
+        {where_clause}
+    """
+
+    export_query = f"""
+        SELECT {selected_sql}
+        FROM read_parquet(?)
+        {where_clause}
+        {order_sql}
+    """
+
+    connection = duckdb.connect()
+
+    try:
+        total_row = connection.execute(
+            count_query,
+            [
+                str(path),
+                *filter_parameters,
+            ],
+        ).fetchone()
+
+        total = (
+            int(total_row[0])
+            if total_row is not None
+            else 0
+        )
+
+        if total > max_rows:
+            raise ValueError(
+                "L’export contient "
+                f"{total} lignes, au-delà de la limite "
+                f"de {max_rows} lignes."
+            )
+
+        cursor = connection.execute(
+            export_query,
+            [
+                str(path),
+                *filter_parameters,
+            ],
+        )
+
+        header_buffer = io.StringIO(
+            newline=""
+        )
+        header_writer = csv.writer(
+            header_buffer,
+            lineterminator="\n",
+        )
+        header_writer.writerow(selected_columns)
+
+        yield header_buffer.getvalue()
+
+        while True:
+            rows = cursor.fetchmany(batch_size)
+
+            if not rows:
+                break
+
+            buffer = io.StringIO(
+                newline=""
+            )
+            writer = csv.writer(
+                buffer,
+                lineterminator="\n",
+            )
+
+            writer.writerows(
+                [
+                    [
+                        _export_cell(value)
+                        for value in row
+                    ]
+                    for row in rows
+                ]
+            )
+
+            yield buffer.getvalue()
+    finally:
+        connection.close()
 
 
 def preview_table(

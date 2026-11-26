@@ -12,6 +12,7 @@ from api.table_preview import (
     preview_csv,
     preview_parquet,
     preview_table,
+    stream_parquet_csv,
 )
 
 
@@ -480,3 +481,96 @@ def test_parquet_preview_filters_non_empty_strings(
         row["id"]
         for row in preview["rows"]
     ] == [1, 5]
+
+
+def test_stream_parquet_csv_respects_view(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "table.parquet"
+    create_parquet(path)
+
+    content = "".join(
+        stream_parquet_csv(
+            path,
+            columns=[
+                "feature_id",
+                "mz",
+            ],
+            sort_by="feature_id",
+            sort_direction="desc",
+            filters=[
+                {
+                    "column": "feature_id",
+                    "operator": "gte",
+                    "value": 245,
+                },
+            ],
+            batch_size=2,
+        )
+    )
+
+    rows = list(
+        csv.DictReader(
+            content.splitlines()
+        )
+    )
+
+    assert list(rows[0]) == [
+        "feature_id",
+        "mz",
+    ]
+
+    assert [
+        int(row["feature_id"])
+        for row in rows
+    ] == [
+        249,
+        248,
+        247,
+        246,
+        245,
+    ]
+
+
+def test_stream_parquet_csv_writes_header_for_empty_result(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "table.parquet"
+    create_parquet(path)
+
+    content = "".join(
+        stream_parquet_csv(
+            path,
+            columns=[
+                "feature_id",
+                "sample",
+            ],
+            filters=[
+                {
+                    "column": "feature_id",
+                    "operator": "gt",
+                    "value": 10_000,
+                },
+            ],
+        )
+    )
+
+    assert content == "feature_id,sample\n"
+
+
+def test_stream_parquet_csv_rejects_excessive_export(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "table.parquet"
+    create_parquet(path)
+
+    with pytest.raises(
+        ValueError,
+        match="au-delà de la limite",
+    ):
+        list(
+            stream_parquet_csv(
+                path,
+                max_rows=100,
+            )
+        )
